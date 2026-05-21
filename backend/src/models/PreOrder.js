@@ -99,7 +99,7 @@ const preOrderSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      default: 'cash_on_delivery',
+      default: 'whatsapp',
       trim: true,
     },
     shippingPlace: {

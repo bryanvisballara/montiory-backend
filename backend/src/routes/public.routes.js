@@ -67,7 +67,11 @@ function formatCustomerPhone(countryCode, phone) {
   return `${countryCode || '+57'} ${String(phone || '').trim()}`.trim()
 }
 
-function getPaymentMethodLabel(paymentMethod) {
+function getPaymentCoordinationLabel(paymentMethod) {
+  if (paymentMethod === 'whatsapp') {
+    return 'Por coordinar en WhatsApp'
+  }
+
   if (paymentMethod === 'cash_on_delivery') {
     return 'Efectivo contra entrega'
   }
@@ -76,7 +80,7 @@ function getPaymentMethodLabel(paymentMethod) {
     return 'Pago en línea'
   }
 
-  return 'Sin definir'
+  return ''
 }
 
 function productHasFreeShipping(product) {
@@ -119,7 +123,6 @@ function buildCheckoutWhatsAppLink({
   subtotalAmount,
   discountAmount,
   totalAmount,
-  paymentMethod,
 }) {
   const customerName = `${customer.firstName || ''} ${customer.lastName || ''}`.trim()
   const itemLines = (Array.isArray(items) ? items : []).map(
@@ -140,7 +143,6 @@ function buildCheckoutWhatsAppLink({
       `Correo: ${customer.email}`,
       `Dirección: ${customer.address}, ${customer.neighborhood}`,
       `Ciudad: ${customer.city}, ${customer.state}`,
-      `Método de pago: ${getPaymentMethodLabel(paymentMethod)}`,
       '',
       'Productos:',
       ...itemLines,
@@ -616,7 +618,7 @@ router.post(
     const items = Array.isArray(request.body.items) ? request.body.items : []
     const shippingZone = request.body.shippingZone || null
     const coupon = request.body.coupon || null
-    const paymentMethod = request.body.paymentMethod?.trim() || ''
+    const paymentMethod = request.body.paymentMethod?.trim() || 'whatsapp'
     const phoneCountryCode = customer.phoneCountryCode?.trim() || '+57'
     const baseSubtotalAmount = Number(request.body.baseSubtotalAmount || 0)
     const discountAmount = Number(request.body.discountAmount || 0)
@@ -650,7 +652,7 @@ router.post(
         : null,
       customer.state?.trim() ? `Departamento: ${customer.state.trim()}` : null,
       shippingZone?.place ? `Envío: ${shippingZone.place}` : null,
-      paymentMethod ? `Pago: ${paymentMethod}` : null,
+      getPaymentCoordinationLabel(paymentMethod) ? `Cobro: ${getPaymentCoordinationLabel(paymentMethod)}` : null,
       coupon?.name ? `Cupón: ${coupon.name}` : null,
       surchargeAmount > 0 ? `Recargo contra entrega: ${formatCurrency(surchargeAmount)}` : null,
       `Total checkout: ${formatCurrency(totalAmount)}`,
@@ -680,7 +682,7 @@ router.post(
       },
     )
 
-    if (paymentMethod === 'cash_on_delivery') {
+    if (paymentMethod !== 'online') {
       await PreOrder.findOneAndUpdate(
         { reference },
         {
