@@ -74,7 +74,7 @@ const navigationItems = [
   { id: 'ordenes', label: 'Órdenes' },
   { id: 'pre-ordenes', label: 'Pre órdenes' },
   { id: 'marketing', label: 'Marketing' },
-  { id: 'socios', label: 'Socios' },
+  { id: 'socios', label: 'Embajadores' },
   { id: 'base-de-datos', label: 'Base de datos' },
 ]
 const operatorNavigationIds = new Set(['ordenes', 'pre-ordenes', 'marketing', 'cupones'])
@@ -212,14 +212,14 @@ function getRoleLabel(role) {
   }
 
   if (role === 'partner') {
-    return 'Socio'
+    return 'Embajador'
   }
 
   return 'Administrador'
 }
 
 function getPartnerDisplayName(partner) {
-  return partner?.name?.trim() || partner?.email || 'Socio'
+  return partner?.name?.trim() || partner?.email || 'Embajador'
 }
 
 function formatPartnerCommission(partner) {
@@ -1600,11 +1600,11 @@ function App() {
       const commissionAmount = Number(partnerForm.commissionAmount || 0)
 
       if (!partnerForm.name.trim() || !partnerForm.email.trim()) {
-        throw new Error('Nombre y correo son obligatorios para el socio.')
+        throw new Error('Nombre y correo son obligatorios para el embajador.')
       }
 
       if (!isEdit && !partnerForm.password) {
-        throw new Error('La contraseña es obligatoria para crear el socio.')
+        throw new Error('La contraseña es obligatoria para crear el embajador.')
       }
 
       if (Number.isNaN(commissionAmount) || commissionAmount < 0) {
@@ -1633,7 +1633,7 @@ function App() {
       setSelectedPartnerSnapshot(snapshot)
       closeModal()
       await loadDashboardData(token, adminRole)
-      showSuccess(isEdit ? 'Socio actualizado correctamente.' : 'Socio creado correctamente.')
+      showSuccess(isEdit ? 'Embajador actualizado correctamente.' : 'Embajador creado correctamente.')
     } catch (error) {
       setDashboardMessage(error.message)
     } finally {
@@ -1663,7 +1663,7 @@ function App() {
       setSelectedPartnerSnapshot(snapshot)
       closePartnerPayModal()
       await loadDashboardData(token, adminRole)
-      showSuccess('Pago del socio marcado como pagado.')
+      showSuccess('Pago del embajador marcado como pagado.')
     } catch (error) {
       setDashboardMessage(error.message)
     } finally {
@@ -2398,8 +2398,8 @@ function App() {
           <div className="modal-card" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <p className="eyebrow">Socios</p>
-                <h3>{isEdit ? 'Modificar socio' : 'Crear nuevo socio'}</h3>
+                <p className="eyebrow">Embajadores</p>
+                <h3>{isEdit ? 'Modificar embajador' : 'Crear nuevo embajador'}</h3>
               </div>
               <button type="button" className="modal-close" onClick={closeModal}>Cerrar</button>
             </div>
@@ -2410,7 +2410,7 @@ function App() {
                 onChange={(event) =>
                   setPartnerForm((current) => ({ ...current, name: event.target.value }))
                 }
-                placeholder="Nombre del socio"
+                placeholder="Nombre del embajador"
               />
               <input
                 type="email"
@@ -2418,7 +2418,7 @@ function App() {
                 onChange={(event) =>
                   setPartnerForm((current) => ({ ...current, email: event.target.value }))
                 }
-                placeholder="Correo del socio"
+                placeholder="Correo del embajador"
               />
               <input
                 type="password"
@@ -2426,7 +2426,7 @@ function App() {
                 onChange={(event) =>
                   setPartnerForm((current) => ({ ...current, password: event.target.value }))
                 }
-                placeholder={isEdit ? 'Nueva contraseña opcional' : 'Contraseña del socio'}
+                placeholder={isEdit ? 'Nueva contraseña opcional' : 'Contraseña del embajador'}
               />
               <label className="toggle-field">
                 <span>Cupón asignado</span>
@@ -2467,7 +2467,7 @@ function App() {
                 />
               </label>
               <button type="submit" disabled={isSavingPartner}>
-                {isSavingPartner ? 'Guardando...' : isEdit ? 'Guardar socio' : 'Crear socio'}
+                {isSavingPartner ? 'Guardando...' : isEdit ? 'Guardar embajador' : 'Crear embajador'}
               </button>
             </form>
           </div>
@@ -2567,7 +2567,7 @@ function App() {
             <WarningIcon />
           </div>
           <p className="eyebrow">Confirmar pago</p>
-          <h3>¿Ya le has pagado a este socio?</h3>
+          <h3>¿Ya le has pagado a este embajador?</h3>
           <p>Periodo: {partnerPayState.label}</p>
           <div className="success-modal__actions">
             <button type="button" className="modal-close" onClick={closePartnerPayModal}>
@@ -2956,8 +2956,8 @@ function App() {
                       <span>{couponProducts.length} publicaciones</span>
                     </div>
                     <div className="coupon-row__partner">
-                      <strong>Socio</strong>
-                      <span>{assignedPartner?.name || 'Sin socio asociado'}</span>
+                      <strong>Embajador</strong>
+                      <span>{assignedPartner?.name || 'Sin embajador asociado'}</span>
                     </div>
                     <div className="row-actions">
                       <button type="button" className="table-row__edit" onClick={() => openEditModal('coupon', coupon)}>
@@ -3280,12 +3280,12 @@ function App() {
             <article className="admin-card">
               <div className="section-header">
                 <div className="card-heading">
-                  <p className="eyebrow">Portal de socio</p>
+                  <p className="eyebrow">Portal de embajador</p>
                   <h3>{selectedPartner ? getPartnerDisplayName(selectedPartner) : 'Mi panel'}</h3>
                   <p>
                     {selectedPartner?.assignedCoupon
                       ? `Tu cupón asignado es ${selectedPartner.assignedCoupon.name} y tu comisión actual por venta es ${formatPartnerCommission(selectedPartner)}.`
-                      : 'Todavía no tienes un cupón asignado. El administrador puede configurarlo desde el panel de socios.'}
+                      : 'Todavía no tienes un cupón asignado. El administrador puede configurarlo desde el panel de embajadores.'}
                   </p>
                 </div>
               </div>
@@ -3304,11 +3304,11 @@ function App() {
               <div className="section-header">
                 <div className="card-heading">
                   <p className="eyebrow">Módulo 08</p>
-                  <h3>Socios</h3>
-                  <p>Crea usuarios de socios, asígnales un cupón y define si su comisión es porcentaje o tarifa fija por venta.</p>
+                  <h3>Embajadores</h3>
+                  <p>Crea usuarios de embajadores, asígnales un cupón y define si su comisión es porcentaje o tarifa fija por venta.</p>
                 </div>
                 <button type="button" onClick={() => openCreateModal('partner')}>
-                  Crear nuevo socio
+                  Crear nuevo embajador
                 </button>
               </div>
 
@@ -3338,7 +3338,7 @@ function App() {
                   </button>
                 ))}
 
-                {!partners.length ? <p className="empty-state">Todavía no hay socios creados.</p> : null}
+                {!partners.length ? <p className="empty-state">Todavía no hay embajadores creados.</p> : null}
               </div>
             </article>
           )}
@@ -3352,17 +3352,17 @@ function App() {
               >
                 <div className="partner-detail-card__summary">
                   <div className="card-heading">
-                    <p className="eyebrow">Detalle del socio</p>
+                    <p className="eyebrow">Detalle del embajador</p>
                     <h3>{getPartnerDisplayName(selectedPartner)}</h3>
                     <p>
                       {selectedPartner.assignedCoupon
                         ? `Cupón asignado: ${selectedPartner.assignedCoupon.name}. Comisión por venta: ${formatPartnerCommission(selectedPartner)}.`
-                        : 'Este socio aún no tiene un cupón asignado.'}
+                        : 'Este embajador aún no tiene un cupón asignado.'}
                     </p>
                   </div>
                   <div className="partner-detail-card__actions">
                     {adminRole === 'admin' ? (
-                      <span className="partner-detail-card__edit-hint">Modificar socio</span>
+                      <span className="partner-detail-card__edit-hint">Modificar embajador</span>
                     ) : null}
                     <span className="partner-detail-card__toggle" aria-hidden="true">
                       {isPartnerDetailExpanded ? '−' : '+'}
@@ -3376,7 +3376,7 @@ function App() {
                   <div className="partner-detail-card__toolbar">
                     {adminRole === 'admin' ? (
                       <button type="button" onClick={() => openEditModal('partner', selectedPartner)}>
-                        Modificar socio
+                        Modificar embajador
                       </button>
                     ) : null}
                   </div>
@@ -3425,7 +3425,7 @@ function App() {
                         </div>
                       ))}
 
-                      {!partnerPayouts.length ? <p className="empty-state">Aún no existen filas de pago para este socio.</p> : null}
+                      {!partnerPayouts.length ? <p className="empty-state">Aún no existen filas de pago para este embajador.</p> : null}
                     </div>
                   </div>
 
@@ -3456,7 +3456,7 @@ function App() {
                             </div>
                           </div>
                         ))}
-                        {!partnerOrders.length ? <p className="empty-state">Aún no hay ventas registradas para este socio.</p> : null}
+                        {!partnerOrders.length ? <p className="empty-state">Aún no hay ventas registradas para este embajador.</p> : null}
                       </div>
                     </div>
 
@@ -3492,7 +3492,7 @@ function App() {
                               </div>
                             </div>
                           ))}
-                          {!partnerCustomers.length ? <p className="empty-state">Aún no hay clientes asociados a este socio.</p> : null}
+                          {!partnerCustomers.length ? <p className="empty-state">Aún no hay clientes asociados a este embajador.</p> : null}
                         </div>
                       </div>
                     </div>
