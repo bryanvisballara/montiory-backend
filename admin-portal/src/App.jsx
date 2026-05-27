@@ -2776,7 +2776,7 @@ function App() {
             <div className="section-header">
               <div className="card-heading">
                 <p className="eyebrow">Módulo 02</p>
-                <h3>Publicaciones de perfumes</h3>
+                <h3>Publicaciones</h3>
                 <p>
                   Agrega productos a una categoría, define precio, stock, foto y la descripción
                   base para la tienda pública.
