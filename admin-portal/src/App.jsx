@@ -715,6 +715,17 @@ function App() {
     [filteredMarketingCustomers, selectedMarketingCustomerIds],
   )
 
+  function clearAuthSession() {
+    setToken('')
+    setAdminEmail(defaultAdminEmail)
+    setAdminRole('admin')
+    setActivePage('dashboard')
+    localStorage.removeItem('sf_admin_token')
+    localStorage.removeItem('sf_admin_email')
+    localStorage.removeItem('sf_admin_role')
+    setLoginData({ email: defaultAdminEmail, password: '' })
+  }
+
   async function apiRequest(path, options = {}) {
     const isFormData = options.body instanceof FormData
 
@@ -739,6 +750,10 @@ function App() {
 
     if (!response.ok) {
       const payload = await response.json().catch(() => ({ message: 'Request failed' }))
+      if (response.status === 401 && path !== '/auth/login') {
+        clearAuthSession()
+        throw new Error('Tu sesión expiró. Inicia sesión nuevamente.')
+      }
       throw new Error(payload.message || 'Request failed')
     }
 
