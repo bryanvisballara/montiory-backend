@@ -89,7 +89,7 @@ export async function uploadImageBuffer(fileBuffer, fileName) {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
-        folder: process.env.CLOUDINARY_UPLOAD_FOLDER || 'saval-fragance/products',
+        folder: process.env.CLOUDINARY_UPLOAD_FOLDER || 'montiory/products',
         public_id: normalizePublicId(fileName),
         resource_type: 'image',
         format: 'webp',

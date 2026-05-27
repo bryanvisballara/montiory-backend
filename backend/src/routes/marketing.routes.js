@@ -16,7 +16,7 @@ function buildMarketingEmail({ subject, message, customerName }) {
     <div style="margin:0;background:#f4efe6;padding:32px 16px;font-family:Arial,sans-serif;color:#24180f;">
       <div style="max-width:640px;margin:0 auto;background:#fffdf9;border:1px solid #e7d7bc;border-radius:28px;overflow:hidden;box-shadow:0 20px 50px rgba(43,26,14,0.12);">
         <div style="padding:32px;background:linear-gradient(180deg,#fff8ef 0%,#f8efe2 100%);border-bottom:1px solid #efe1c9;">
-          <div style="display:inline-block;padding:8px 12px;border:1px solid #d8ba7f;border-radius:999px;color:#8a6420;letter-spacing:0.2em;font-size:11px;text-transform:uppercase;font-weight:700;">Saval Fragance</div>
+          <div style="display:inline-block;padding:8px 12px;border:1px solid #c7b79f;border-radius:999px;color:#1d1b18;letter-spacing:0.2em;font-size:11px;text-transform:uppercase;font-weight:700;">Montiory</div>
           <h1 style="margin:18px 0 10px;font-size:34px;line-height:1;color:#2d1c10;font-family:Georgia,serif;">${subject}</h1>
           <p style="margin:0;color:#5f4a35;font-size:16px;line-height:1.6;">Hola ${customerName},</p>
         </div>
@@ -24,7 +24,7 @@ function buildMarketingEmail({ subject, message, customerName }) {
           <div style="background:#fffbf4;border:1px solid #ecdfc8;border-radius:22px;padding:22px;color:#24180f;line-height:1.7;">
             <div style="color:#24180f;">${body}</div>
           </div>
-          <p style="margin:22px 0 0;color:#6d5943;font-size:13px;line-height:1.6;">Mensaje promocional enviado por Saval Fragance.</p>
+          <p style="margin:22px 0 0;color:#6d5943;font-size:13px;line-height:1.6;">Mensaje promocional enviado por Montiory.</p>
         </div>
       </div>
     </div>

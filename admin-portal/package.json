@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:hostinger": "VITE_APP_BASE=/admin-portal/ vite build",
+    "build:hostinger": "VITE_APP_BASE=/admin/ vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },

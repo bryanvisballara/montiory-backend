@@ -16,14 +16,14 @@ import { CSS } from '@dnd-kit/utilities'
 import './App.css'
 
 const isLocalHost = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
-const apiBaseUrl = import.meta.env.VITE_API_URL || (isLocalHost ? 'http://localhost:10000/api' : 'https://salvafragance.onrender.com/api')
-const sidebarBrandImageUrl = `${import.meta.env.BASE_URL}sidebar-brand.jpeg`
-const loginBrandImageUrl = `${import.meta.env.BASE_URL}login-brand.jpeg`
+const apiBaseUrl = import.meta.env.VITE_API_URL || (isLocalHost ? 'http://localhost:10000/api' : 'https://montiory-backend.onrender.com/api')
+const sidebarBrandImageUrl = `${import.meta.env.BASE_URL}montiory-logo.jpg`
+const loginBrandImageUrl = `${import.meta.env.BASE_URL}montiory-logo.jpg`
 const adminBasePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '')
 const adminHomePath = adminBasePath ? `${adminBasePath}/` : '/'
 const adminLoginPath = adminBasePath ? `${adminBasePath}/login` : '/login'
 
-const emptyCategoryForm = { name: '', description: '' }
+const emptyCategoryForm = { name: '', description: '', hasFreeShipping: false }
 const emptyDecantSettings = { key: 'default', sortOrder: 999, sizes: [] }
 const emptyProductForm = {
   name: '',
@@ -35,6 +35,7 @@ const emptyProductForm = {
   reviewCount: '',
   imageUrls: [],
   description: '',
+  hasFreeShipping: false,
 }
 const emptyShippingForm = { place: '', price: '', eta: '' }
 const emptyCouponForm = {
@@ -46,6 +47,14 @@ const emptyCouponForm = {
   endsAt: '',
   hasNoExpiry: false,
 }
+const emptyPartnerForm = {
+  name: '',
+  email: '',
+  password: '',
+  couponId: '',
+  commissionType: 'fixed',
+  commissionAmount: '',
+}
 const emptyMarketingForm = {
   subject: '',
   message: '',
@@ -55,6 +64,7 @@ const emptyTrackingForm = { shippingCarrier: '', trackingNumber: '' }
 const emptyModalState = { type: '', mode: 'create', item: null }
 const emptyDeleteState = { type: '', item: null }
 const emptySuccessState = { message: '', action: null }
+const emptyPartnerPayState = { partnerId: '', payoutId: '', label: '' }
 const navigationItems = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'categorias', label: 'Categorías' },
@@ -65,9 +75,11 @@ const navigationItems = [
   { id: 'ordenes', label: 'Órdenes' },
   { id: 'pre-ordenes', label: 'Pre órdenes' },
   { id: 'marketing', label: 'Marketing' },
+  { id: 'socios', label: 'Socios' },
   { id: 'base-de-datos', label: 'Base de datos' },
 ]
 const operatorNavigationIds = new Set(['ordenes', 'pre-ordenes', 'marketing', 'cupones'])
+const partnerNavigationIds = new Set(['socios'])
 
 const phoneCountryOptions = [
   { value: '+57', label: 'Colombia (+57)' },
@@ -89,10 +101,25 @@ function formatCurrency(value) {
   }).format(Number(value || 0))
 }
 
+function renderFreeShippingBadge(label = 'Envío gratis activo') {
+  return (
+    <span className="status-badge">
+      <span className="status-badge__icon" aria-hidden="true" />
+      <span>{label}</span>
+    </span>
+  )
+}
+
 function formatDate(value) {
   return new Intl.DateTimeFormat('es-CO', {
     dateStyle: 'medium',
     timeStyle: 'short',
+  }).format(new Date(value))
+}
+
+function formatDateOnly(value) {
+  return new Intl.DateTimeFormat('es-CO', {
+    dateStyle: 'medium',
   }).format(new Date(value))
 }
 
@@ -141,19 +168,70 @@ function buildMarketingWhatsAppLink(phone, message) {
 }
 
 function normalizeAdminRole(role) {
-  return role === 'operator' ? 'operator' : 'admin'
+  if (role === 'operator') {
+    return 'operator'
+  }
+
+  if (role === 'partner') {
+    return 'partner'
+  }
+
+  return 'admin'
 }
 
 function getAllowedNavigationItems(role) {
-  if (normalizeAdminRole(role) === 'operator') {
+  const normalizedRole = normalizeAdminRole(role)
+
+  if (normalizedRole === 'operator') {
     return navigationItems.filter((item) => operatorNavigationIds.has(item.id))
+  }
+
+  if (normalizedRole === 'partner') {
+    return navigationItems.filter((item) => partnerNavigationIds.has(item.id))
   }
 
   return navigationItems
 }
 
 function getDefaultActivePage(role) {
-  return normalizeAdminRole(role) === 'operator' ? 'ordenes' : 'dashboard'
+  const normalizedRole = normalizeAdminRole(role)
+
+  if (normalizedRole === 'operator') {
+    return 'ordenes'
+  }
+
+  if (normalizedRole === 'partner') {
+    return 'socios'
+  }
+
+  return 'dashboard'
+}
+
+function getRoleLabel(role) {
+  if (role === 'operator') {
+    return 'Operario'
+  }
+
+  if (role === 'partner') {
+    return 'Socio'
+  }
+
+  return 'Administrador'
+}
+
+function getPartnerDisplayName(partner) {
+  return partner?.name?.trim() || partner?.email || 'Socio'
+}
+
+function formatPartnerCommission(partner) {
+  const commissionType = partner?.commissionType === 'percentage' ? 'percentage' : 'fixed'
+  const commissionAmount = Number(partner?.commissionAmount || 0)
+
+  if (commissionType === 'percentage') {
+    return `${commissionAmount}% por venta`
+  }
+
+  return `${formatCurrency(commissionAmount)} por venta`
 }
 
 function normalizePhoneNumber(phoneCountryCode, phone) {
@@ -163,6 +241,10 @@ function normalizePhoneNumber(phoneCountryCode, phone) {
 }
 
 function getPaymentMethodLabel(paymentMethod) {
+  if (paymentMethod === 'whatsapp') {
+    return 'Por coordinar en WhatsApp'
+  }
+
   if (paymentMethod === 'cash_on_delivery') {
     return 'Efectivo contra entrega'
   }
@@ -198,7 +280,7 @@ function getOrderTitle(order) {
   const items = getOrderItems(order)
 
   if (!items.length) {
-    return 'Pedido Saval Fragance'
+    return 'Pedido Montiory'
   }
 
   const [firstItem] = items
@@ -364,7 +446,8 @@ function WarningIcon() {
 }
 
 function App() {
-  const defaultAdminEmail = 'joyeriacrispin6@gmail.com'
+  const legacyAdminEmail = ['joyeriacrispin6', 'gmail.com'].join('@')
+  const defaultAdminEmail = ''
   const [currentPath, setCurrentPath] = useState(() => {
     if (typeof window === 'undefined') {
       return '/'
@@ -373,9 +456,10 @@ function App() {
     return window.location.pathname || '/'
   })
   const [token, setToken] = useState(() => localStorage.getItem('sf_admin_token') || '')
-  const [adminEmail, setAdminEmail] = useState(
-    () => localStorage.getItem('sf_admin_email') || defaultAdminEmail,
-  )
+  const [adminEmail, setAdminEmail] = useState(() => {
+    const storedAdminEmail = localStorage.getItem('sf_admin_email') || defaultAdminEmail
+    return storedAdminEmail === legacyAdminEmail ? defaultAdminEmail : storedAdminEmail
+  })
   const [adminRole, setAdminRole] = useState(() => normalizeAdminRole(localStorage.getItem('sf_admin_role')))
   const [loginData, setLoginData] = useState({ email: adminEmail, password: '' })
   const [loginError, setLoginError] = useState('')
@@ -394,10 +478,18 @@ function App() {
   const [couponForm, setCouponForm] = useState(emptyCouponForm)
   const [couponCategorySelection, setCouponCategorySelection] = useState('')
   const [trackingForm, setTrackingForm] = useState(emptyTrackingForm)
+  const [partnerForm, setPartnerForm] = useState(emptyPartnerForm)
   const [customerFilter, setCustomerFilter] = useState('')
   const [marketingFilter, setMarketingFilter] = useState('')
   const [marketingForm, setMarketingForm] = useState(emptyMarketingForm)
   const [selectedMarketingCustomerIds, setSelectedMarketingCustomerIds] = useState([])
+  const [partners, setPartners] = useState([])
+  const [selectedPartnerId, setSelectedPartnerId] = useState('')
+  const [selectedPartnerSnapshot, setSelectedPartnerSnapshot] = useState(null)
+  const [isPartnerDetailExpanded, setIsPartnerDetailExpanded] = useState(false)
+  const [partnerPayState, setPartnerPayState] = useState(emptyPartnerPayState)
+  const [isSavingPartner, setIsSavingPartner] = useState(false)
+  const [isPayingPartnerPayout, setIsPayingPartnerPayout] = useState(false)
   const [activePage, setActivePage] = useState(() => getDefaultActivePage(localStorage.getItem('sf_admin_role')))
   const [modalState, setModalState] = useState(emptyModalState)
   const [deleteState, setDeleteState] = useState(emptyDeleteState)
@@ -437,10 +529,24 @@ function App() {
     [couponForm.productIds, products],
   )
 
+  const couponPartnerMap = useMemo(
+    () =>
+      partners.reduce((map, partner) => {
+        const couponId = partner.assignedCoupon?._id
+
+        if (couponId) {
+          map.set(couponId, partner)
+        }
+
+        return map
+      }, new Map()),
+    [partners],
+  )
+
   const isAuthenticated = Boolean(token)
   const accessibleNavigationItems = useMemo(() => getAllowedNavigationItems(adminRole), [adminRole])
   const firstAccessiblePage = accessibleNavigationItems[0]?.id || 'dashboard'
-  const sessionRoleLabel = adminRole === 'operator' ? 'Operario' : 'Administrador'
+  const sessionRoleLabel = getRoleLabel(adminRole)
 
   const productFilePreviewUrls = useMemo(
     () => productFiles.map((file) => ({ fileName: file.name, previewUrl: URL.createObjectURL(file) })),
@@ -590,6 +696,18 @@ function App() {
     [customers, selectedMarketingCustomerIds],
   )
 
+  const selectedPartner = selectedPartnerSnapshot?.partner || null
+  const partnerOrders = selectedPartnerSnapshot?.orders || []
+  const partnerCustomers = selectedPartnerSnapshot?.customers || []
+  const partnerPayouts = selectedPartnerSnapshot?.payouts || []
+  const partnerMetrics = selectedPartnerSnapshot?.metrics || {
+    totalSales: 0,
+    totalRevenue: 0,
+    totalCommission: 0,
+    pendingCommission: 0,
+    paidCommission: 0,
+  }
+
   const areAllVisibleMarketingCustomersSelected = useMemo(
     () =>
       Boolean(filteredMarketingCustomers.length) &&
@@ -637,6 +755,18 @@ function App() {
     return JSON.parse(responseText)
   }
 
+  async function loadPartnerDetail(partnerId, activeToken = token) {
+    if (!partnerId) {
+      setSelectedPartnerSnapshot(null)
+      return null
+    }
+
+    const headers = activeToken ? { Authorization: `Bearer ${activeToken}` } : {}
+    const snapshot = await apiRequest(`/partners/${partnerId}`, { headers })
+    setSelectedPartnerSnapshot(snapshot)
+    return snapshot
+  }
+
   function openCreateModal(type) {
     setDashboardMessage('')
 
@@ -665,6 +795,10 @@ function App() {
       setTrackingForm(emptyTrackingForm)
     }
 
+    if (type === 'partner') {
+      setPartnerForm(emptyPartnerForm)
+    }
+
     setModalState({ type, mode: 'create', item: null })
   }
 
@@ -672,7 +806,11 @@ function App() {
     setDashboardMessage('')
 
     if (type === 'category') {
-      setCategoryForm({ name: item.name, description: item.description || '' })
+      setCategoryForm({
+        name: item.name,
+        description: item.description || '',
+        hasFreeShipping: Boolean(item.hasFreeShipping),
+      })
     }
 
     if (type === 'product') {
@@ -686,6 +824,7 @@ function App() {
         reviewCount: String(item.reviewCount ?? 0),
         imageUrls: item.imageUrls || [],
         description: item.description || '',
+        hasFreeShipping: Boolean(item.hasFreeShipping),
       })
       setProductFiles([])
     }
@@ -718,11 +857,27 @@ function App() {
       })
     }
 
+    if (type === 'partner') {
+      setPartnerForm({
+        name: item.name || '',
+        email: item.email || '',
+        password: '',
+        couponId: item.assignedCoupon?._id || '',
+        commissionType: item.commissionType === 'percentage' ? 'percentage' : 'fixed',
+        commissionAmount: String(item.commissionAmount ?? ''),
+      })
+    }
+
     setModalState({ type, mode: 'edit', item })
   }
 
   function openTrackingModal(order) {
     openEditModal('tracking', order)
+  }
+
+  function openCouponProductsModal(coupon) {
+    setDashboardMessage('')
+    setModalState({ type: 'coupon-products', mode: 'view', item: coupon })
   }
 
   function closeModal() {
@@ -740,6 +895,10 @@ function App() {
 
   function closeSuccessModal() {
     setSuccessState(emptySuccessState)
+  }
+
+  function closePartnerPayModal() {
+    setPartnerPayState(emptyPartnerPayState)
   }
 
   function closeErrorModal() {
@@ -777,6 +936,12 @@ function App() {
     setOrders([])
     setPreOrders([])
     setCoupons([])
+    setPartners([])
+    setPartnerForm(emptyPartnerForm)
+    setSelectedPartnerId('')
+    setSelectedPartnerSnapshot(null)
+    setIsPartnerDetailExpanded(false)
+    setPartnerPayState(emptyPartnerPayState)
     setMarketingFilter('')
     setMarketingForm(emptyMarketingForm)
     setSelectedMarketingCustomerIds([])
@@ -885,8 +1050,29 @@ function App() {
 
     try {
       const headers = activeToken ? { Authorization: `Bearer ${activeToken}` } : {}
-      const isOperator = normalizeAdminRole(activeRole) === 'operator'
-      const [categoryRows, decantRows, productRows, shippingRows, customerRows, orderRows, preOrderRows, couponRows] = await Promise.all([
+      const normalizedRole = normalizeAdminRole(activeRole)
+      const isOperator = normalizedRole === 'operator'
+      const isPartner = normalizedRole === 'partner'
+
+      if (isPartner) {
+        const partnerSnapshot = await apiRequest('/partners/me', { headers })
+
+        setCategories([])
+        setDecantSettings(emptyDecantSettings)
+        setProducts([])
+        setShippingZones([])
+        setCustomers([])
+        setOrders([])
+        setPreOrders([])
+        setCoupons([])
+        setPartners([])
+        setSelectedPartnerId(partnerSnapshot.partner.id)
+        setSelectedPartnerSnapshot(partnerSnapshot)
+        setDashboardMessage('')
+        return
+      }
+
+      const [categoryRows, decantRows, productRows, shippingRows, customerRows, orderRows, preOrderRows, couponRows, partnerRows] = await Promise.all([
         isOperator ? Promise.resolve([]) : apiRequest('/categories', { headers }),
         isOperator ? Promise.resolve(emptyDecantSettings) : apiRequest('/decants', { headers }),
         isOperator ? Promise.resolve([]) : apiRequest('/products', { headers }),
@@ -895,6 +1081,7 @@ function App() {
         apiRequest('/orders', { headers }),
         apiRequest('/preorders', { headers }),
         apiRequest('/coupons', { headers }),
+        isOperator ? Promise.resolve([]) : apiRequest('/partners', { headers }),
       ])
 
       setCategories(categoryRows)
@@ -905,6 +1092,15 @@ function App() {
       setOrders(orderRows)
       setPreOrders(preOrderRows)
       setCoupons(couponRows)
+      setPartners(partnerRows)
+      setSelectedPartnerId((current) => {
+        if (current && partnerRows.some((partner) => partner.id === current)) {
+          return current
+        }
+
+        return partnerRows[0]?.id || ''
+      })
+      setIsPartnerDetailExpanded(false)
       setProductForm((current) => ({
         ...current,
         categoryId: current.categoryId || categoryRows[0]?._id || '',
@@ -926,6 +1122,16 @@ function App() {
       loadDashboardData(token, adminRole)
     }
   }, [adminRole, isAuthenticated, token])
+
+  useEffect(() => {
+    if (!isAuthenticated || normalizeAdminRole(adminRole) !== 'admin' || !selectedPartnerId) {
+      return
+    }
+
+    loadPartnerDetail(selectedPartnerId, token).catch((error) => {
+      setDashboardMessage(error.message)
+    })
+  }, [adminRole, isAuthenticated, selectedPartnerId, token])
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -1143,6 +1349,7 @@ function App() {
           rating,
           reviewCount,
           imageUrls,
+          hasFreeShipping: Boolean(productForm.hasFreeShipping),
         }),
       })
 
@@ -1354,6 +1561,86 @@ function App() {
       showSuccess(isEdit ? 'Cupón actualizado correctamente.' : 'Cupón creado correctamente.')
     } catch (error) {
       setDashboardMessage(error.message)
+    }
+  }
+
+  async function handlePartnerSubmit(event) {
+    event.preventDefault()
+
+    try {
+      const isEdit = modalState.mode === 'edit' && modalState.type === 'partner'
+      const commissionType = partnerForm.commissionType === 'percentage' ? 'percentage' : 'fixed'
+      const commissionAmount = Number(partnerForm.commissionAmount || 0)
+
+      if (!partnerForm.name.trim() || !partnerForm.email.trim()) {
+        throw new Error('Nombre y correo son obligatorios para el socio.')
+      }
+
+      if (!isEdit && !partnerForm.password) {
+        throw new Error('La contraseña es obligatoria para crear el socio.')
+      }
+
+      if (Number.isNaN(commissionAmount) || commissionAmount < 0) {
+        throw new Error('La comisión por venta debe ser un valor válido.')
+      }
+
+      if (commissionType === 'percentage' && commissionAmount > 100) {
+        throw new Error('La comisión porcentual no puede ser mayor a 100.')
+      }
+
+      setIsSavingPartner(true)
+
+      const snapshot = await apiRequest(isEdit ? `/partners/${modalState.item.id}` : '/partners', {
+        method: isEdit ? 'PUT' : 'POST',
+        body: JSON.stringify({
+          name: partnerForm.name,
+          email: partnerForm.email,
+          password: partnerForm.password,
+          couponId: partnerForm.couponId || '',
+          commissionType,
+          commissionAmount,
+        }),
+      })
+
+      setSelectedPartnerId(snapshot.partner.id)
+      setSelectedPartnerSnapshot(snapshot)
+      closeModal()
+      await loadDashboardData(token, adminRole)
+      showSuccess(isEdit ? 'Socio actualizado correctamente.' : 'Socio creado correctamente.')
+    } catch (error) {
+      setDashboardMessage(error.message)
+    } finally {
+      setIsSavingPartner(false)
+    }
+  }
+
+  function openPartnerPayoutModal(partnerId, payout) {
+    setPartnerPayState({
+      partnerId,
+      payoutId: payout._id,
+      label: `${formatDateOnly(payout.periodStart)} - ${formatDateOnly(payout.periodEnd)}`,
+    })
+  }
+
+  async function handleConfirmPartnerPayout() {
+    if (!partnerPayState.partnerId || !partnerPayState.payoutId) {
+      return
+    }
+
+    try {
+      setIsPayingPartnerPayout(true)
+      const snapshot = await apiRequest(`/partners/${partnerPayState.partnerId}/payouts/${partnerPayState.payoutId}/pay`, {
+        method: 'POST',
+      })
+
+      setSelectedPartnerSnapshot(snapshot)
+      closePartnerPayModal()
+      await loadDashboardData(token, adminRole)
+      showSuccess('Pago del socio marcado como pagado.')
+    } catch (error) {
+      setDashboardMessage(error.message)
+    } finally {
+      setIsPayingPartnerPayout(false)
     }
   }
 
@@ -1652,6 +1939,17 @@ function App() {
                 placeholder="Describe el enfoque de esta categoría"
                 rows="4"
               />
+              <label className={categoryForm.hasFreeShipping ? 'selector-toggle selector-toggle--active' : 'selector-toggle'}>
+                <input
+                  type="checkbox"
+                  checked={categoryForm.hasFreeShipping}
+                  onChange={(event) =>
+                    setCategoryForm((current) => ({ ...current, hasFreeShipping: event.target.checked }))
+                  }
+                />
+                <span className="selector-checkmark" aria-hidden="true" />
+                <span>Envío gratis para esta categoría</span>
+              </label>
               <button type="submit">{isEdit ? 'Guardar cambios' : 'Crear categoría'}</button>
             </form>
           </div>
@@ -1803,6 +2101,17 @@ function App() {
                   placeholder="Resumen olfativo o comercial"
                   rows="4"
                 />
+              </label>
+              <label className={productForm.hasFreeShipping ? 'selector-toggle selector-toggle--active grid-form__field--wide' : 'selector-toggle grid-form__field--wide'}>
+                <input
+                  type="checkbox"
+                  checked={productForm.hasFreeShipping}
+                  onChange={(event) =>
+                    setProductForm((current) => ({ ...current, hasFreeShipping: event.target.checked }))
+                  }
+                />
+                <span className="selector-checkmark" aria-hidden="true" />
+                <span>Envío gratis para esta publicación</span>
               </label>
               <p className="section-helper section-helper--tight">
                 Arrastra las imágenes de izquierda a derecha para definir el orden que se verá en el storefront.
@@ -2011,6 +2320,124 @@ function App() {
       )
     }
 
+    if (modalState.type === 'coupon-products') {
+      const coupon = modalState.item
+      const couponProducts = Array.isArray(coupon?.products) ? coupon.products : []
+
+      return (
+        <div className="modal-backdrop" onClick={closeModal}>
+          <div className="modal-card modal-card--coupon-products" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <p className="eyebrow">Cupones</p>
+                <h3>Aplicaciones de {coupon?.name || 'este cupón'}</h3>
+                <p className="section-helper section-helper--tight">
+                  Revisa las publicaciones donde aplica este cupón.
+                </p>
+              </div>
+              <button type="button" className="modal-close" onClick={closeModal}>Cerrar</button>
+            </div>
+
+            <div className="coupon-products-modal__list">
+              {couponProducts.length ? (
+                couponProducts.map((product) => (
+                  <article key={product._id} className="coupon-products-modal__item">
+                    <strong>{product.name}</strong>
+                    <span>{formatCurrency(product.offerPrice)}</span>
+                  </article>
+                ))
+              ) : (
+                <p className="empty-state">Este cupón todavía no tiene publicaciones asociadas.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    if (modalState.type === 'partner') {
+      return (
+        <div className="modal-backdrop" onClick={closeModal}>
+          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <p className="eyebrow">Socios</p>
+                <h3>{isEdit ? 'Modificar socio' : 'Crear nuevo socio'}</h3>
+              </div>
+              <button type="button" className="modal-close" onClick={closeModal}>Cerrar</button>
+            </div>
+            <form className="stack-form" onSubmit={handlePartnerSubmit}>
+              <input
+                type="text"
+                value={partnerForm.name}
+                onChange={(event) =>
+                  setPartnerForm((current) => ({ ...current, name: event.target.value }))
+                }
+                placeholder="Nombre del socio"
+              />
+              <input
+                type="email"
+                value={partnerForm.email}
+                onChange={(event) =>
+                  setPartnerForm((current) => ({ ...current, email: event.target.value }))
+                }
+                placeholder="Correo del socio"
+              />
+              <input
+                type="password"
+                value={partnerForm.password}
+                onChange={(event) =>
+                  setPartnerForm((current) => ({ ...current, password: event.target.value }))
+                }
+                placeholder={isEdit ? 'Nueva contraseña opcional' : 'Contraseña del socio'}
+              />
+              <label className="toggle-field">
+                <span>Cupón asignado</span>
+                <select
+                  value={partnerForm.couponId}
+                  onChange={(event) =>
+                    setPartnerForm((current) => ({ ...current, couponId: event.target.value }))
+                  }
+                >
+                  <option value="">Sin cupón asignado</option>
+                  {coupons.map((coupon) => (
+                    <option key={coupon._id} value={coupon._id}>{coupon.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="toggle-field">
+                <span>Tipo de comisión</span>
+                <select
+                  value={partnerForm.commissionType}
+                  onChange={(event) =>
+                    setPartnerForm((current) => ({ ...current, commissionType: event.target.value }))
+                  }
+                >
+                  <option value="fixed">Tarifa fija por venta</option>
+                  <option value="percentage">Porcentaje de la venta</option>
+                </select>
+              </label>
+              <label className="toggle-field">
+                <span>Comisión por venta</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={partnerForm.commissionAmount}
+                  onChange={(event) =>
+                    setPartnerForm((current) => ({ ...current, commissionAmount: event.target.value }))
+                  }
+                  placeholder={partnerForm.commissionType === 'percentage' ? 'Ej. 10' : 'Ej. 15000'}
+                />
+              </label>
+              <button type="submit" disabled={isSavingPartner}>
+                {isSavingPartner ? 'Guardando...' : isEdit ? 'Guardar socio' : 'Crear socio'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div className="modal-backdrop" onClick={closeModal}>
         <div className="modal-card" onClick={(event) => event.stopPropagation()}>
@@ -2090,6 +2517,33 @@ function App() {
     )
   }
 
+  function renderPartnerPayoutModal() {
+    if (!partnerPayState.partnerId || !partnerPayState.payoutId) {
+      return null
+    }
+
+    return (
+      <div className="modal-backdrop modal-backdrop--light" onClick={closePartnerPayModal}>
+        <div className="error-modal" onClick={(event) => event.stopPropagation()}>
+          <div className="danger-modal__icon" aria-hidden="true">
+            <WarningIcon />
+          </div>
+          <p className="eyebrow">Confirmar pago</p>
+          <h3>¿Ya le has pagado a este socio?</h3>
+          <p>Periodo: {partnerPayState.label}</p>
+          <div className="success-modal__actions">
+            <button type="button" className="modal-close" onClick={closePartnerPayModal}>
+              No todavía
+            </button>
+            <button type="button" onClick={handleConfirmPartnerPayout} disabled={isPayingPartnerPayout}>
+              {isPayingPartnerPayout ? 'Marcando...' : 'Sí, ya pagué'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (!isAuthenticated) {
     return (
       <main className="auth-shell">
@@ -2098,7 +2552,7 @@ function App() {
             <img src={loginBrandImageUrl} alt="" />
           </div>
           <p className="eyebrow">Portal Administrativo</p>
-          <h1>Saval Fragance</h1>
+          <h1>Montiory</h1>
           <p className="lead">
             Gestiona colecciones, inventario y reglas de envío con acceso privado.
           </p>
@@ -2119,7 +2573,7 @@ function App() {
                 onChange={(event) =>
                   setLoginData((current) => ({ ...current, email: event.target.value }))
                 }
-                placeholder="joyeriacrispin6@gmail.com"
+                placeholder=""
               />
             </label>
 
@@ -2227,6 +2681,7 @@ function App() {
                     </div>
                     <small className="list-item__order-label">Posición {index + 1}</small>
                     <span>{category.description || 'Sin descripción todavía.'}</span>
+                    {category.hasFreeShipping ? renderFreeShippingBadge() : null}
                     {!isDecantsCard ? (
                       <span className="list-item__hint">
                         {isExpanded ? 'Ocultar publicaciones' : 'Ver publicaciones de esta categoría'}
@@ -2254,6 +2709,7 @@ function App() {
                             <div>
                               <strong>{product.name}</strong>
                               <span>{formatCurrency(product.offerPrice)} · Stock {product.stock || 0}</span>
+                              {product.hasFreeShipping || product.category?.hasFreeShipping ? renderFreeShippingBadge() : null}
                             </div>
                             <div className="row-actions">
                               <button type="button" className="table-row__edit" onClick={() => openEditModal('product', product)}>
@@ -2303,6 +2759,9 @@ function App() {
                 <div key={product._id} className="table-row">
                   <div className="table-row__product-copy">
                     <strong>{product.name}</strong>
+                    {product.hasFreeShipping || product.category?.hasFreeShipping ? (
+                      renderFreeShippingBadge()
+                    ) : null}
                     {product.description ? (
                       <>
                         <span
@@ -2543,38 +3002,50 @@ function App() {
             </div>
 
             <div className="coupon-list">
-              {coupons.map((coupon) => (
-                <div key={coupon._id} className="coupon-row">
-                  <div>
-                    <strong>{coupon.name}</strong>
-                    <span>
-                      {coupon.discountType === 'percentage'
-                        ? `${coupon.discountValue}% de descuento`
-                        : `${formatCurrency(coupon.discountValue)} de descuento`}
-                    </span>
+              {coupons.map((coupon) => {
+                const assignedPartner = couponPartnerMap.get(coupon._id)
+                const couponProducts = Array.isArray(coupon.products) ? coupon.products : []
+
+                return (
+                  <div key={coupon._id} className="coupon-row">
+                    <div>
+                      <strong>{coupon.name}</strong>
+                      <span>
+                        {coupon.discountType === 'percentage'
+                          ? `${coupon.discountValue}% de descuento`
+                          : `${formatCurrency(coupon.discountValue)} de descuento`}
+                      </span>
+                    </div>
+                    <div>
+                      <strong>{getCouponStatus(coupon)}</strong>
+                      <span>
+                        {coupon.startsAt && coupon.endsAt
+                          ? `${formatDate(coupon.startsAt)} a ${formatDate(coupon.endsAt)}`
+                          : 'Sin rango definido'}
+                      </span>
+                    </div>
+                    <div className="coupon-row__applications">
+                      <strong>Aplica en</strong>
+                      <button type="button" className="table-row__edit coupon-row__applications-button" onClick={() => openCouponProductsModal(coupon)}>
+                        Ver aplicaciones
+                      </button>
+                      <span>{couponProducts.length} publicaciones</span>
+                    </div>
+                    <div className="coupon-row__partner">
+                      <strong>Socio</strong>
+                      <span>{assignedPartner?.name || 'Sin socio asociado'}</span>
+                    </div>
+                    <div className="row-actions">
+                      <button type="button" className="table-row__edit" onClick={() => openEditModal('coupon', coupon)}>
+                        Modificar
+                      </button>
+                      <button type="button" className="table-row__delete" onClick={() => openDeleteModal('coupon', coupon)}>
+                        Eliminar
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <strong>{getCouponStatus(coupon)}</strong>
-                    <span>
-                      {coupon.startsAt && coupon.endsAt
-                        ? `${formatDate(coupon.startsAt)} a ${formatDate(coupon.endsAt)}`
-                        : 'Sin rango definido'}
-                    </span>
-                  </div>
-                  <div>
-                    <strong>Aplica en</strong>
-                    <span>{(coupon.products || []).map((product) => product.name).join(', ') || 'Sin publicaciones'}</span>
-                  </div>
-                  <div className="row-actions">
-                    <button type="button" className="table-row__edit" onClick={() => openEditModal('coupon', coupon)}>
-                      Modificar
-                    </button>
-                    <button type="button" className="table-row__delete" onClick={() => openDeleteModal('coupon', coupon)}>
-                      Eliminar
-                    </button>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
 
               {!coupons.length ? <p className="empty-state">Todavía no hay cupones creados.</p> : null}
             </div>
@@ -2657,7 +3128,7 @@ function App() {
               <p className="eyebrow">Módulo 05A</p>
               <h3>Pre órdenes</h3>
               <p>
-                Aquí aparecen los clientes que dieron click en comprar con efectivo contra entrega.
+                Aquí aparecen los clientes que confirmaron su pedido por WhatsApp.
                 Cuando confirmes que el cliente ordenó, se moverá automáticamente a Órdenes.
               </p>
             </div>
@@ -2847,7 +3318,7 @@ function App() {
                           className="marketing-whatsapp__link"
                           href={buildMarketingWhatsAppLink(
                             customer.phone,
-                            `Hola ${customer.firstName}, ${marketingForm.message || 'tenemos una promoción especial para ti en Saval Fragance.'}`,
+                            `Hola ${customer.firstName}, ${marketingForm.message || 'tenemos una promoción especial para ti en Montiory.'}`,
                           )}
                           target="_blank"
                           rel="noreferrer"
@@ -2865,6 +3336,247 @@ function App() {
               </div>
             </div>
           </article>
+        </section>
+      )
+    }
+
+    if (activePage === 'socios') {
+      const metricCards = [
+        { label: 'Ventas con su cupón', value: String(partnerMetrics.totalSales).padStart(2, '0') },
+        { label: 'Facturación generada', value: formatCurrency(partnerMetrics.totalRevenue) },
+        { label: 'Comisión acumulada', value: formatCurrency(partnerMetrics.totalCommission) },
+        { label: 'Pendiente por pagar', value: formatCurrency(partnerMetrics.pendingCommission) },
+      ]
+
+      return (
+        <section className="admin-section">
+          {dashboardMessage ? <p className="status-note">{dashboardMessage}</p> : null}
+
+          {adminRole === 'partner' ? (
+            <article className="admin-card">
+              <div className="section-header">
+                <div className="card-heading">
+                  <p className="eyebrow">Portal de socio</p>
+                  <h3>{selectedPartner ? getPartnerDisplayName(selectedPartner) : 'Mi panel'}</h3>
+                  <p>
+                    {selectedPartner?.assignedCoupon
+                      ? `Tu cupón asignado es ${selectedPartner.assignedCoupon.name} y tu comisión actual por venta es ${formatPartnerCommission(selectedPartner)}.`
+                      : 'Todavía no tienes un cupón asignado. El administrador puede configurarlo desde el panel de socios.'}
+                  </p>
+                </div>
+              </div>
+
+              <section className="stats-grid">
+                {metricCards.map((item) => (
+                  <article key={item.label} className="stat-card">
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                  </article>
+                ))}
+              </section>
+            </article>
+          ) : (
+            <article className="admin-card">
+              <div className="section-header">
+                <div className="card-heading">
+                  <p className="eyebrow">Módulo 08</p>
+                  <h3>Socios</h3>
+                  <p>Crea usuarios de socios, asígnales un cupón y define si su comisión es porcentaje o tarifa fija por venta.</p>
+                </div>
+                <button type="button" onClick={() => openCreateModal('partner')}>
+                  Crear nuevo socio
+                </button>
+              </div>
+
+              <div className="partner-list">
+                {partners.map((partner) => (
+                  <button
+                    key={partner.id}
+                    type="button"
+                    className={selectedPartnerId === partner.id ? 'partner-card partner-card--active' : 'partner-card'}
+                    onClick={() => {
+                      setSelectedPartnerId(partner.id)
+                      setIsPartnerDetailExpanded(false)
+                    }}
+                  >
+                    <div>
+                      <strong>{getPartnerDisplayName(partner)}</strong>
+                      <span>{partner.email}</span>
+                    </div>
+                    <div>
+                      <strong>{partner.assignedCoupon?.name || 'Sin cupón'}</strong>
+                      <span>Comisión por venta: {formatPartnerCommission(partner)}</span>
+                    </div>
+                    <div>
+                      <strong>{formatCurrency(partner.pendingCommission || 0)}</strong>
+                      <span>{partner.pendingRows || 0} fila(s) pendientes</span>
+                    </div>
+                  </button>
+                ))}
+
+                {!partners.length ? <p className="empty-state">Todavía no hay socios creados.</p> : null}
+              </div>
+            </article>
+          )}
+
+          {selectedPartner ? (
+            <article className="admin-card">
+              <button
+                type="button"
+                className={isPartnerDetailExpanded ? 'partner-detail-card partner-detail-card--expanded' : 'partner-detail-card'}
+                onClick={() => setIsPartnerDetailExpanded((current) => !current)}
+              >
+                <div className="partner-detail-card__summary">
+                  <div className="card-heading">
+                    <p className="eyebrow">Detalle del socio</p>
+                    <h3>{getPartnerDisplayName(selectedPartner)}</h3>
+                    <p>
+                      {selectedPartner.assignedCoupon
+                        ? `Cupón asignado: ${selectedPartner.assignedCoupon.name}. Comisión por venta: ${formatPartnerCommission(selectedPartner)}.`
+                        : 'Este socio aún no tiene un cupón asignado.'}
+                    </p>
+                  </div>
+                  <div className="partner-detail-card__actions">
+                    {adminRole === 'admin' ? (
+                      <span className="partner-detail-card__edit-hint">Modificar socio</span>
+                    ) : null}
+                    <span className="partner-detail-card__toggle" aria-hidden="true">
+                      {isPartnerDetailExpanded ? '−' : '+'}
+                    </span>
+                  </div>
+                </div>
+              </button>
+
+              {isPartnerDetailExpanded ? (
+                <>
+                  <div className="partner-detail-card__toolbar">
+                    {adminRole === 'admin' ? (
+                      <button type="button" onClick={() => openEditModal('partner', selectedPartner)}>
+                        Modificar socio
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <section className="stats-grid">
+                    {metricCards.map((item) => (
+                      <article key={item.label} className="stat-card">
+                        <span>{item.label}</span>
+                        <strong>{item.value}</strong>
+                      </article>
+                    ))}
+                  </section>
+
+                  <div className="partner-payout-table">
+                    <div className="partner-payout-table__head">
+                      <span>Periodo</span>
+                      <span>Ventas</span>
+                      <span>Facturación</span>
+                      <span>Comisión</span>
+                      <span>Estado</span>
+                      <span>Acción</span>
+                    </div>
+                    <div className="partner-payout-table__body">
+                      {partnerPayouts.map((payout) => (
+                        <div key={payout._id} className="partner-payout-row">
+                          <span>{formatDateOnly(payout.periodStart)} - {formatDateOnly(payout.periodEnd)}</span>
+                          <span>{payout.salesCount}</span>
+                          <span>{formatCurrency(payout.revenueAmount)}</span>
+                          <span>{formatCurrency(payout.commissionAmount)}</span>
+                          <span>{payout.status === 'paid' ? 'Pagado' : 'Pendiente'}</span>
+                          {adminRole === 'admin' ? (
+                            payout.status === 'paid' ? (
+                              <span className="order-row__status">Pagado</span>
+                            ) : (
+                              <button
+                                type="button"
+                                className="table-row__edit"
+                                onClick={() => openPartnerPayoutModal(selectedPartner.id, payout)}
+                              >
+                                Pagar
+                              </button>
+                            )
+                          ) : (
+                            <span>{payout.status === 'paid' ? `Pagado ${payout.paidAt ? formatDate(payout.paidAt) : ''}` : 'Pendiente'}</span>
+                          )}
+                        </div>
+                      ))}
+
+                      {!partnerPayouts.length ? <p className="empty-state">Aún no existen filas de pago para este socio.</p> : null}
+                    </div>
+                  </div>
+
+                  <div className="partner-panels">
+                    <div className="partner-panel">
+                      <div className="card-heading">
+                        <p className="eyebrow">Ventas</p>
+                        <h3>Órdenes con su cupón</h3>
+                      </div>
+                      <div className="order-list">
+                        {partnerOrders.map((order) => (
+                          <div key={order._id} className="order-row partner-sale-row">
+                            <div>
+                              <strong>{order.reference || 'Sin referencia'}</strong>
+                              <span>{formatDate(order.createdAt)}</span>
+                            </div>
+                            <div>
+                              <strong>{order.customer?.firstName} {order.customer?.lastName}</strong>
+                              <span>{order.customer?.email}</span>
+                            </div>
+                            <div>
+                              <strong>{order.partnerCouponName || order.couponName || 'Sin cupón'}</strong>
+                              <span>{getPaymentMethodLabel(order.paymentMethod)}</span>
+                            </div>
+                            <div>
+                              <strong>{formatCurrency(order.totalAmount)}</strong>
+                              <span>Comisión: {formatCurrency(order.partnerCommissionAmount)}</span>
+                            </div>
+                          </div>
+                        ))}
+                        {!partnerOrders.length ? <p className="empty-state">Aún no hay ventas registradas para este socio.</p> : null}
+                      </div>
+                    </div>
+
+                    <div className="partner-panel">
+                      <div className="card-heading">
+                        <p className="eyebrow">Clientes</p>
+                        <h3>Compradores con su cupón</h3>
+                      </div>
+                      <div className="customer-table">
+                        <div className="customer-table__head customer-table__head--partners">
+                          <span>Cliente</span>
+                          <span>Contacto</span>
+                          <span>Ciudad</span>
+                          <span>Fecha</span>
+                        </div>
+                        <div className="customer-table__body">
+                          {partnerCustomers.map((customer) => (
+                            <div key={customer._id} className="customer-row customer-row--partners">
+                              <div>
+                                <strong>{customer.firstName} {customer.lastName}</strong>
+                                <span>{customer.address}</span>
+                              </div>
+                              <div>
+                                <strong>{customer.phone}</strong>
+                                <span>{customer.email}</span>
+                              </div>
+                              <div>
+                                <strong>{customer.city}</strong>
+                                <span>{customer.notes || 'Sin notas'}</span>
+                              </div>
+                              <div>
+                                <strong>{formatDate(customer.createdAt)}</strong>
+                              </div>
+                            </div>
+                          ))}
+                          {!partnerCustomers.length ? <p className="empty-state">Aún no hay clientes asociados a este socio.</p> : null}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : null}
+            </article>
+          ) : null}
         </section>
       )
     }
@@ -2938,11 +3650,11 @@ function App() {
         <div>
           <div className="brand-lockup">
             <div className="brand-lockup__mark">
-              <img src={sidebarBrandImageUrl} alt="Saval Fragance" />
+              <img src={sidebarBrandImageUrl} alt="Montiory" />
             </div>
             <div>
               <p className="eyebrow">Admin Console</p>
-              <h2>Saval Fragance</h2>
+              <h2>Montiory</h2>
             </div>
           </div>
 
@@ -2973,6 +3685,7 @@ function App() {
       <section className="dashboard-content">{renderPage()}</section>
       {renderModal()}
       {renderDeleteModal()}
+      {renderPartnerPayoutModal()}
       {dashboardMessage ? (
         <div className="modal-backdrop modal-backdrop--light" onClick={closeErrorModal}>
           <div className="error-modal" onClick={(event) => event.stopPropagation()}>

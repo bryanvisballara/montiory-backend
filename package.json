@@ -1,5 +1,5 @@
 {
-  "name": "savalfragance-render-root",
+  "name": "montiory-render-root",
   "private": true,
   "scripts": {
     "postinstall": "npm --prefix backend install",

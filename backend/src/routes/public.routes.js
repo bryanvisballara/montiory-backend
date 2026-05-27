@@ -51,7 +51,7 @@ function getStorefrontBaseUrl() {
     process.env.PUBLIC_STORE_URL?.trim() ||
     clientUrls.find((url) => url.startsWith('https://')) ||
     clientUrls.find((url) => url.startsWith('http://')) ||
-    'https://savalfragance.com'
+    'https://montiory.com'
   ).replace(/\/$/, '')
 }
 
@@ -94,7 +94,7 @@ function normalizePhoneNumber(countryCode, phone) {
 }
 
 function createCheckoutReference() {
-  return `SAVAL-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`
+  return `MONTIORY-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`
 }
 
 function createSha256Hash(value) {
@@ -461,7 +461,7 @@ async function finalizeApprovedCheckoutSession(session) {
         email: customer.email,
         name: `${customer.firstName} ${customer.lastName}`,
       },
-      subject: 'Tu pedido en Saval Fragance está siendo preparado',
+      subject: 'Tu pedido en Montiory está siendo preparado',
       htmlContent: buildOrderPlacedEmail({
         customerName: customer.firstName,
         orderReference: order.reference,
@@ -729,7 +729,7 @@ router.post(
       const delivery = await sendBrevoEmail({
         to: {
           email: adminEmail,
-          name: 'Administrador Saval Fragance',
+          name: 'Administrador Montiory',
         },
         subject: `Nueva orden ${reference}`,
         htmlContent: buildAdminOrderNotificationEmail({
@@ -1009,7 +1009,7 @@ router.post(
 
     const order = await Order.create({
       customer: customer.id,
-      reference: request.body.reference?.trim() || `SAVAL-${Date.now()}`,
+      reference: request.body.reference?.trim() || `MONTIORY-${Date.now()}`,
       product: productId,
       items: [
         {
@@ -1041,7 +1041,7 @@ router.post(
           email,
           name: `${firstName} ${lastName}`,
         },
-        subject: `Tu pedido en Saval Fragance está siendo preparado`,
+        subject: `Tu pedido en Montiory está siendo preparado`,
         htmlContent: buildOrderPlacedEmail({
           customerName: firstName,
           orderReference: order.reference,

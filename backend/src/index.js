@@ -22,11 +22,13 @@ const app = express()
 const port = Number(process.env.PORT || 10000)
 
 const defaultAllowedOrigins = [
-  'https://savalfragance.com',
-  'https://www.savalfragance.com',
-  'https://salvafragance.onrender.com',
+  'https://montiory.com',
+  'https://www.montiory.com',
+  'https://montiory-backend.onrender.com',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5174',
 ]
 
 const allowedOrigins = [...defaultAllowedOrigins, ...(process.env.CLIENT_URL || '')
@@ -45,7 +47,7 @@ app.use(
 app.use(express.json())
 
 app.get('/api/health', (_request, response) => {
-  response.json({ status: 'ok', service: 'savalfragance-api' })
+  response.json({ status: 'ok', service: 'montiory-api' })
 })
 
 app.use('/api/auth', authRouter)
@@ -70,7 +72,7 @@ async function startServer() {
   await seedAdminUsers()
 
   app.listen(port, () => {
-    console.log(`Saval Fragance API listening on port ${port}`)
+    console.log(`Montiory API listening on port ${port}`)
   })
 }
 

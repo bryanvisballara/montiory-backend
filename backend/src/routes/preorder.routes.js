@@ -91,7 +91,7 @@ router.post(
           email: preOrder.customer.email,
           name: `${preOrder.customer.firstName} ${preOrder.customer.lastName}`,
         },
-        subject: 'Tu pedido en Saval Fragance está siendo preparado',
+        subject: 'Tu pedido en Montiory está siendo preparado',
         htmlContent: buildOrderPlacedEmail({
           customerName: preOrder.customer.firstName,
           orderReference: preOrder.reference,

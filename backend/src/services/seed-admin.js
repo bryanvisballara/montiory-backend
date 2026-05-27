@@ -61,7 +61,7 @@ export async function seedAdminUsers() {
   await upsertAdminUser({
     email: process.env.ADMIN_EMAIL,
     password: process.env.ADMIN_PASSWORD,
-    name: process.env.ADMIN_NAME || 'Administrador Saval',
+    name: process.env.ADMIN_NAME || 'Administrador Montiory',
     role: 'admin',
     migrateSingleAdmin: true,
   })
@@ -69,7 +69,7 @@ export async function seedAdminUsers() {
   await upsertAdminUser({
     email: process.env.OPERATOR_EMAIL,
     password: process.env.OPERATOR_PASSWORD,
-    name: process.env.OPERATOR_NAME || 'Operario Saval',
+    name: process.env.OPERATOR_NAME || 'Operario Montiory',
     role: 'operator',
   })
 

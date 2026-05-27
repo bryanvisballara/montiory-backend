@@ -11,7 +11,7 @@ function shellTemplate({ title, heading, intro, accent, body }) {
     <div style="margin:0;background:#f4efe6;padding:32px 16px;font-family:Arial,sans-serif;color:#24180f;">
       <div style="max-width:640px;margin:0 auto;background:#fffdf9;border:1px solid #e7d7bc;border-radius:28px;overflow:hidden;box-shadow:0 20px 50px rgba(43,26,14,0.12);">
         <div style="padding:32px 32px 18px;background:linear-gradient(180deg,#fff8ef 0%,#f8efe2 100%);border-bottom:1px solid #efe1c9;">
-          <div style="display:inline-block;padding:8px 12px;border:1px solid #d8ba7f;border-radius:999px;color:#8a6420;letter-spacing:0.2em;font-size:11px;text-transform:uppercase;font-weight:700;">Saval Fragance</div>
+          <div style="display:inline-block;padding:8px 12px;border:1px solid #c7b79f;border-radius:999px;color:#1d1b18;letter-spacing:0.2em;font-size:11px;text-transform:uppercase;font-weight:700;">Montiory</div>
           <h1 style="margin:18px 0 10px;font-size:36px;line-height:1;color:#000000 !important;font-family:Georgia,serif;">${heading}</h1>
           <p style="margin:0;color:#000000 !important;font-size:16px;line-height:1.6;">${intro}</p>
         </div>
@@ -22,7 +22,7 @@ function shellTemplate({ title, heading, intro, accent, body }) {
           <div style="margin-top:24px;padding:18px 20px;border-radius:20px;background:${accent};color:#140f06;font-weight:700;text-align:center;">
             ${title}
           </div>
-          <p style="margin:22px 0 0;color:#6d5943;font-size:13px;line-height:1.6;">Este correo fue enviado por orders@savalfragance.com</p>
+          <p style="margin:22px 0 0;color:#6d5943;font-size:13px;line-height:1.6;">Este correo fue enviado por orders@montiory.com</p>
         </div>
       </div>
     </div>
@@ -75,7 +75,7 @@ function escapeHtml(value) {
 export function buildOrderPlacedEmail({ customerName, orderReference, items, totalAmount, shippingPlace }) {
   return shellTemplate({
     title: 'Tu pedido está siendo preparado',
-    heading: `Gracias por elegir Saval Fragance, ${customerName}`,
+    heading: `Gracias por elegir Montiory, ${customerName}`,
     intro: 'Tu orden fue confirmada correctamente y nuestro equipo ya la está preparando con el cuidado y detalle que merece.',
     accent: 'linear-gradient(135deg,#f3d393,#bf8b32)',
     body: `

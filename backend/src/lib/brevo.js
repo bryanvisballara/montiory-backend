@@ -1,7 +1,7 @@
 export async function sendBrevoEmail({ to, subject, htmlContent }) {
   const apiKey = process.env.BREVO_API_KEY
-  const senderEmail = process.env.BREVO_SENDER_EMAIL || 'orders@savalfragance.com'
-  const senderName = process.env.BREVO_SENDER_NAME || 'Saval Fragance'
+  const senderEmail = process.env.BREVO_SENDER_EMAIL || 'orders@montiory.com'
+  const senderName = process.env.BREVO_SENDER_NAME || 'Montiory'
 
   if (!apiKey) {
     console.warn('BREVO_API_KEY is missing. Email skipped.')

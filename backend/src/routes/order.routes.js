@@ -71,7 +71,7 @@ router.put(
             ? order.items
             : [
                 {
-                  name: order.product?.name || 'Pedido Saval Fragance',
+                  name: order.product?.name || 'Pedido Montiory',
                   variantLabel: '',
                   quantity: 1,
                   unitPrice: order.totalAmount,
