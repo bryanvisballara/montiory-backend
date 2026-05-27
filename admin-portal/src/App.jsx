@@ -69,7 +69,6 @@ const navigationItems = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'categorias', label: 'Categorías' },
   { id: 'publicaciones', label: 'Publicaciones' },
-  { id: 'decants', label: 'Decants' },
   { id: 'envios', label: 'Envíos' },
   { id: 'cupones', label: 'Cupones' },
   { id: 'ordenes', label: 'Órdenes' },
@@ -2837,126 +2836,6 @@ function App() {
                   </div>
                 </div>
               ))}
-            </div>
-          </article>
-        </section>
-      )
-    }
-
-    if (activePage === 'decants') {
-      return (
-        <section className="admin-section">
-          {dashboardMessage ? <p className="status-note">{dashboardMessage}</p> : null}
-
-          <article className="admin-card">
-            <div className="section-header">
-              <div className="card-heading">
-                <p className="eyebrow">Módulo 03</p>
-                <h3>Decants</h3>
-                <p>
-                  Define los tamaños globales de decants y luego asigna precios por publicación.
-                  Solo los perfumes con precios configurados aparecerán en el chip Decants del storefront.
-                </p>
-              </div>
-              <button type="button" onClick={handleAddDecantSize}>
-                Agregar tamaño
-              </button>
-            </div>
-
-            <div className="decant-settings-grid">
-              {decantSettings.sizes.map((size, index) => (
-                <div key={size._id || `new-${index}`} className="decant-size-card">
-                  <label className="toggle-field">
-                    <span>Etiqueta</span>
-                    <input
-                      type="text"
-                      value={size.label || ''}
-                      onChange={(event) => handleDecantSizeChange(index, 'label', event.target.value)}
-                      placeholder="Ej. Decant 5 ml"
-                    />
-                  </label>
-                  <label className="toggle-field">
-                    <span>Tamaño en ml</span>
-                    <input
-                      type="number"
-                      min="1"
-                      value={size.sizeMl}
-                      onChange={(event) => handleDecantSizeChange(index, 'sizeMl', event.target.value)}
-                      placeholder="5"
-                    />
-                  </label>
-                  <button type="button" className="table-row__delete" onClick={() => handleRemoveDecantSize(index)}>
-                    Eliminar tamaño
-                  </button>
-                </div>
-              ))}
-
-              {!decantSettings.sizes.length ? (
-                <p className="empty-state">Todavía no has configurado tamaños de decants.</p>
-              ) : null}
-            </div>
-
-            <div className="row-actions row-actions--start">
-              <button type="button" onClick={handleSaveDecantSettings} disabled={isSavingDecantSettings}>
-                {isSavingDecantSettings ? 'Guardando tamaños...' : 'Guardar tamaños de decants'}
-              </button>
-            </div>
-          </article>
-
-          <article className="admin-card">
-            <div className="card-heading">
-              <p className="eyebrow">Precios por publicación</p>
-              <h3>Perfumes vinculados a decants</h3>
-              <p>
-                Cada publicación aparece automáticamente aquí. Si una publicación no tiene al menos un precio de decant, no se mostrará en el storefront bajo el chip Decants.
-              </p>
-            </div>
-
-            <div className="decant-product-list">
-              {products.map((product) => (
-                <div key={product._id} className="decant-product-card">
-                  <div className="decant-product-card__header">
-                    <div>
-                      <strong>{product.name}</strong>
-                      <span>{product.category?.name || 'Sin categoría'}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleSaveProductDecants(product)}
-                      disabled={savingProductDecantId === product._id || !decantSettings.sizes.length}
-                    >
-                      {savingProductDecantId === product._id ? 'Guardando...' : 'Guardar precios'}
-                    </button>
-                  </div>
-
-                  <div className="decant-product-card__prices">
-                    {decantSettings.sizes.map((size) => {
-                      const currentPrice = (product.decantPrices || []).find(
-                        (entry) => String(entry.sizeId) === String(size._id),
-                      )
-
-                      return (
-                        <label key={size._id} className="toggle-field">
-                          <span>{size.label?.trim() || formatDecantSize(size)}</span>
-                          <input
-                            type="number"
-                            min="0"
-                            value={currentPrice?.price ?? ''}
-                            onChange={(event) => handleProductDecantPriceChange(product._id, size._id, event.target.value)}
-                            placeholder={`Precio para ${formatDecantSize(size)}`}
-                          />
-                        </label>
-                      )
-                    })}
-
-                    {!decantSettings.sizes.length ? (
-                      <p className="empty-state">Primero configura uno o más tamaños para poder asignar precios.</p>
-                    ) : null}
-                  </div>
-                </div>
-              ))}
-
-              {!products.length ? <p className="empty-state">Todavía no hay publicaciones creadas.</p> : null}
             </div>
           </article>
         </section>

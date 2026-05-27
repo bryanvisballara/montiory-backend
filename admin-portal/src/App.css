@@ -74,8 +74,6 @@
 .marketing-card,
 .partner-detail-card,
 .partner-card,
-.decant-size-card,
-.decant-product-card,
 .shipping-fallback-form,
 .product-selector,
 .file-dropzone,
@@ -759,44 +757,6 @@ button,
 .category-linked-products__item div {
   display: grid;
   gap: 4px;
-}
-
-.decant-settings-grid,
-.decant-product-list {
-  display: grid;
-  gap: 12px;
-}
-
-.decant-settings-grid {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-}
-
-.decant-size-card,
-.decant-product-card {
-  display: grid;
-  gap: 12px;
-  padding: 16px 18px;
-  border-radius: 18px;
-  background: rgba(0, 0, 0, 0.18);
-  border: 1px solid rgba(233, 198, 128, 0.08);
-}
-
-.decant-product-card__header {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: start;
-}
-
-.decant-product-card__header div {
-  display: grid;
-  gap: 4px;
-}
-
-.decant-product-card__prices {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
 }
 
 .customer-table {
@@ -1948,8 +1908,6 @@ button:hover {
 .marketing-card,
 .partner-detail-card,
 .partner-card,
-.decant-size-card,
-.decant-product-card,
 .shipping-fallback-form,
 .product-selector,
 .file-dropzone,
