@@ -444,6 +444,15 @@ function WarningIcon() {
   )
 }
 
+function UserIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="8" r="3.8" />
+      <path d="M4.8 20.2c.9-3.4 3.6-5.4 7.2-5.4s6.3 2 7.2 5.4" />
+    </svg>
+  )
+}
+
 function App() {
   const legacyAdminEmail = ['joyeriacrispin6', 'gmail.com'].join('@')
   const defaultAdminEmail = ''
@@ -493,6 +502,7 @@ function App() {
   const [modalState, setModalState] = useState(emptyModalState)
   const [deleteState, setDeleteState] = useState(emptyDeleteState)
   const [successState, setSuccessState] = useState(emptySuccessState)
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [dashboardMessage, setDashboardMessage] = useState('')
   const [productFiles, setProductFiles] = useState([])
@@ -936,6 +946,7 @@ function App() {
   }
 
   function handleLogout() {
+    setIsUserMenuOpen(false)
     setToken('')
     setAdminEmail(defaultAdminEmail)
     setAdminRole('admin')
@@ -3584,18 +3595,36 @@ function App() {
             ))}
           </nav>
         </div>
-
-        <div className="sidebar-card">
-          <span>Sesión activa</span>
-          <strong>{adminEmail}</strong>
-          <span>{sessionRoleLabel}</span>
-          <button type="button" onClick={handleLogout}>
-            Cerrar sesión
-          </button>
-        </div>
       </aside>
 
-      <section className="dashboard-content">{renderPage()}</section>
+      <div className="dashboard-main">
+        <div className="dashboard-topbar">
+          <div className="user-menu">
+            <button
+              type="button"
+              className="user-menu__trigger"
+              aria-label="Abrir menú de usuario"
+              aria-expanded={isUserMenuOpen}
+              onClick={() => setIsUserMenuOpen((current) => !current)}
+            >
+              <UserIcon />
+            </button>
+
+            {isUserMenuOpen ? (
+              <div className="user-menu__panel">
+                <span>Sesión iniciada</span>
+                <strong>{adminEmail}</strong>
+                <small>{sessionRoleLabel}</small>
+                <button type="button" onClick={handleLogout}>
+                  Cerrar sesión
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <section className="dashboard-content">{renderPage()}</section>
+      </div>
       {renderModal()}
       {renderDeleteModal()}
       {renderPartnerPayoutModal()}

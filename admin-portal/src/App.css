@@ -17,7 +17,7 @@
 }
 
 .auth-panel,
-.dashboard-content {
+.dashboard-main {
   background:
     linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(241, 235, 226, 0.96));
 }
@@ -41,9 +41,6 @@
 
 .sidebar .eyebrow,
 .sidebar h2,
-.sidebar-card,
-.sidebar-card span,
-.sidebar-card strong,
 .sidebar-nav__item {
   color: #fffaf2;
 }
@@ -56,11 +53,6 @@
 .sidebar-nav__item:hover {
   background: rgba(255, 250, 242, 0.16);
   border-color: rgba(255, 250, 242, 0.28);
-}
-
-.sidebar-card {
-  background: rgba(255, 250, 242, 0.08);
-  border-color: rgba(255, 250, 242, 0.16);
 }
 
 .auth-form,
@@ -150,7 +142,6 @@ button,
 .auth-panel,
 .admin-card,
 .stat-card,
-.sidebar-card,
 .header-badge,
 .table-row,
 .list-item {
@@ -211,7 +202,6 @@ button,
 }
 
 .seed-box span,
-.sidebar-card span,
 .stat-card span,
 .list-item span,
 .table-row span {
@@ -219,7 +209,6 @@ button,
 }
 
 .seed-box strong,
-.sidebar-card strong,
 .stat-card strong,
 .list-item strong,
 .table-row strong {
@@ -352,24 +341,89 @@ button,
   align-items: start;
 }
 
-.sidebar-card {
-  margin-top: auto;
-  flex-shrink: 0;
+.dashboard-main {
+  min-width: 0;
+  min-height: 100vh;
   display: grid;
-  gap: 12px;
-  padding: 18px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(233, 198, 128, 0.12);
+  grid-template-rows: auto 1fr;
+  background:
+    radial-gradient(circle at top right, rgba(214, 170, 84, 0.14), transparent 22%),
+    linear-gradient(180deg, #0b0b0d 0%, #15110c 100%);
+}
+
+.dashboard-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: 72px;
+  padding: 18px 32px 0;
+  pointer-events: none;
+}
+
+.user-menu {
+  position: relative;
+  pointer-events: auto;
+}
+
+.user-menu__trigger {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: var(--text-primary);
+  background: rgba(255, 253, 248, 0.92);
+  border: 1px solid rgba(29, 27, 24, 0.12);
+  box-shadow: 0 18px 36px rgba(39, 32, 24, 0.16);
+}
+
+.user-menu__trigger svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.user-menu__panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(280px, calc(100vw - 48px));
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 18px;
+  color: var(--text-primary);
+  background: rgba(255, 253, 248, 0.98);
+  border: 1px solid rgba(29, 27, 24, 0.12);
+  box-shadow: 0 28px 60px rgba(39, 32, 24, 0.22);
+}
+
+.user-menu__panel span,
+.user-menu__panel small {
+  color: var(--text-muted);
+}
+
+.user-menu__panel strong {
+  overflow-wrap: anywhere;
+}
+
+.user-menu__panel button {
+  margin-top: 8px;
+  width: 100%;
 }
 
 .dashboard-content {
   padding: 28px 32px;
   display: grid;
   align-content: start;
-  background:
-    radial-gradient(circle at top right, rgba(214, 170, 84, 0.14), transparent 22%),
-    linear-gradient(180deg, #0b0b0d 0%, #15110c 100%);
 }
 
 .admin-section {
@@ -1875,9 +1929,6 @@ button:hover {
 
 .sidebar .eyebrow,
 .sidebar h2,
-.sidebar-card,
-.sidebar-card span,
-.sidebar-card strong,
 .sidebar-nav__item {
   color: #fffaf2;
 }
@@ -1890,11 +1941,6 @@ button:hover {
 .sidebar-nav__item:hover {
   background: rgba(255, 250, 242, 0.16);
   border-color: rgba(255, 250, 242, 0.28);
-}
-
-.sidebar-card {
-  background: rgba(255, 250, 242, 0.08);
-  border-color: rgba(255, 250, 242, 0.16);
 }
 
 .auth-form,
