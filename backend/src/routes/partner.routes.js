@@ -58,7 +58,7 @@ async function buildPartnerSnapshot(partnerId) {
     .lean()
 
   if (!partner) {
-    throw createHttpError(404, 'Socio no encontrado')
+    throw createHttpError(404, 'Embajador no encontrado')
   }
 
   const payouts = await syncPartnerPayouts(partner)
@@ -102,7 +102,7 @@ async function ensureCouponAvailable(couponId, currentPartnerId = null) {
   }).lean()
 
   if (existingPartner) {
-    throw createHttpError(409, 'Ese cupón ya está asignado a otro socio')
+    throw createHttpError(409, 'Ese cupón ya está asignado a otro embajador')
   }
 
   return coupon
@@ -228,7 +228,7 @@ router.put(
     const partner = await AdminUser.findOne({ _id: request.params.id, role: 'partner' })
 
     if (!partner) {
-      throw createHttpError(404, 'Socio no encontrado')
+      throw createHttpError(404, 'Embajador no encontrado')
     }
 
     const email = request.body.email?.trim().toLowerCase()

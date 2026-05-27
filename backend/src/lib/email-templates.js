@@ -185,7 +185,7 @@ export function buildPartnerSaleEmail({
 }) {
   return shellTemplate({
     title: `Venta registrada con ${escapeHtml(couponName)}`,
-    heading: `Hola ${escapeHtml(partnerName || 'socio')}`,
+    heading: `Hola ${escapeHtml(partnerName || 'embajador')}`,
     intro: 'Se registró una nueva venta usando tu cupón y ya quedó abonada en tu panel.',
     accent: 'linear-gradient(135deg,#d7efff,#7db8ff)',
     body: `

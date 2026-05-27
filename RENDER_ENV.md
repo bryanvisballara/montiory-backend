@@ -12,9 +12,9 @@ ADMIN_ORDER_EMAIL=admin@montiory.com
 ADMIN_PASSWORD=112233
 OPERATOR_EMAIL=andrisfontalvo9@gmail.com
 OPERATOR_PASSWORD=010203
-PARTNER_NAME=Socio Demo
-PARTNER_EMAIL=socio.demo@montiory.com
-PARTNER_PASSWORD=Socio12345
+PARTNER_NAME=Embajador Demo
+PARTNER_EMAIL=embajador.demo@montiory.com
+PARTNER_PASSWORD=Embajador12345
 CLIENT_URL=https://montiory.com,https://www.montiory.com,https://montiory-backend.onrender.com,http://localhost:5174,http://127.0.0.1:5174
 STOREFRONT_URL=https://montiory.com
 WHATSAPP_PHONE_NUMBER=573001767364
@@ -44,7 +44,7 @@ Notas
 - La `MONGODB_URI` debe salir del cluster creado dentro del proyecto MongoDB Atlas de Montiory, no del proyecto Salva Fragance. La base puede llamarse `montiory`.
 - `ADMIN_EMAIL` y `ADMIN_PASSWORD` corresponden al seed inicial del login administrativo.
 - `OPERATOR_EMAIL` y `OPERATOR_PASSWORD` crean o actualizan el usuario operario con acceso a ordenes, preordenes, marketing y cupones.
-- `PARTNER_NAME`, `PARTNER_EMAIL` y `PARTNER_PASSWORD` crean o actualizan un socio de prueba para entrar por el mismo login page del portal.
+- `PARTNER_NAME`, `PARTNER_EMAIL` y `PARTNER_PASSWORD` crean o actualizan un embajador de prueba para entrar por el mismo login page del portal.
 - `ADMIN_ORDER_EMAIL` es opcional; si existe, recibira las notificaciones de nuevas ordenes del checkout. Si no existe, se usa `ADMIN_EMAIL`.
 - `JWT_SECRET` debe cambiarse por un valor largo y privado antes de produccion real.
 - Brevo enviara el correo de pedido recibido y el correo con numero de seguimiento.

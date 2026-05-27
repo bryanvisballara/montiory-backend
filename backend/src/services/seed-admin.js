@@ -76,7 +76,7 @@ export async function seedAdminUsers() {
   await upsertAdminUser({
     email: process.env.PARTNER_EMAIL,
     password: process.env.PARTNER_PASSWORD,
-    name: process.env.PARTNER_NAME || 'Socio de prueba',
+    name: process.env.PARTNER_NAME || 'Embajador de prueba',
     role: 'partner',
   })
 }
