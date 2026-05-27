@@ -616,9 +616,16 @@ button,
 .table-row__delete {
   padding: 9px 12px;
   border-radius: 12px;
-  color: #ffd8d0;
-  background: rgba(120, 28, 20, 0.18);
-  border: 1px solid rgba(233, 120, 96, 0.2);
+  color: #ffffff;
+  background: linear-gradient(135deg, #b93224, #7f1d16);
+  border: 1px solid rgba(185, 50, 36, 0.52);
+  box-shadow: 0 12px 22px rgba(127, 29, 22, 0.18);
+}
+
+.list-item__delete:hover,
+.table-row__delete:hover {
+  background: linear-gradient(135deg, #cf3c2b, #912219);
+  border-color: rgba(207, 60, 43, 0.66);
 }
 
 .row-actions {

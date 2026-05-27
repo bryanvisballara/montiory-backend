@@ -193,6 +193,10 @@ function formatDeliveryEstimate() {
 }
 
 function getVisibleDecantPrices(product, decantSettings) {
+  if (!decantSettings?.isEnabled) {
+    return []
+  }
+
   const productDecantPrices = Array.isArray(product?.decantPrices) ? product.decantPrices : []
   const settingsSizes = Array.isArray(decantSettings?.sizes) ? decantSettings.sizes : []
 

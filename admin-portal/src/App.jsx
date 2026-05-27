@@ -24,7 +24,7 @@ const adminHomePath = adminBasePath ? `${adminBasePath}/` : '/'
 const adminLoginPath = adminBasePath ? `${adminBasePath}/login` : '/login'
 
 const emptyCategoryForm = { name: '', description: '', hasFreeShipping: false }
-const emptyDecantSettings = { key: 'default', sortOrder: 999, sizes: [] }
+const emptyDecantSettings = { key: 'default', sortOrder: 999, isEnabled: false, sizes: [] }
 const emptyProductForm = {
   name: '',
   categoryId: '',
@@ -671,17 +671,18 @@ function App() {
       type: 'category',
       sortOrder: normalizeOrderValue(category.sortOrder, index),
     }))
+    const shouldShowDecants = Boolean(decantSettings.isEnabled)
     const decantsSortOrder = normalizeOrderValue(decantSettings.sortOrder, categoryItems.length)
 
     return [
       ...categoryItems,
-      {
+      ...(shouldShowDecants ? [{
         _id: 'decants',
         name: 'Decants',
         description: 'Chip especial del storefront para perfumes con tamaños de decants configurados.',
         type: 'decants',
         sortOrder: decantsSortOrder,
-      },
+      }] : []),
     ].sort((leftItem, rightItem) => {
       if (leftItem.sortOrder !== rightItem.sortOrder) {
         return leftItem.sortOrder - rightItem.sortOrder
@@ -689,7 +690,7 @@ function App() {
 
       return leftItem.type === 'decants' ? 1 : -1
     })
-  }, [categories, decantSettings.sortOrder])
+  }, [categories, decantSettings.isEnabled, decantSettings.sortOrder])
 
   const selectedMarketingCustomers = useMemo(
     () => customers.filter((customer) => selectedMarketingCustomerIds.includes(customer._id)),
@@ -1303,6 +1304,7 @@ function App() {
           method: 'PUT',
           body: JSON.stringify({
             sortOrder: nextDecantSortOrder,
+            isEnabled: Boolean(decantSettings.isEnabled),
             sizes: (decantSettings.sizes || []).map((size) => ({
               ...(size._id ? { _id: size._id } : {}),
               label: size.label,
@@ -1668,6 +1670,7 @@ function App() {
 
     const labels = {
       category: 'esta categoría',
+      decants: 'Decants',
       product: 'esta publicación',
       shipping: 'este destino',
       coupon: 'este cupón',
@@ -1676,6 +1679,7 @@ function App() {
     try {
       const paths = {
         category: `/categories/${item._id}`,
+        decants: '/decants',
         product: `/products/${item._id}`,
         shipping: `/shipping-zones/${item._id}`,
         coupon: `/coupons/${item._id}`,
@@ -1685,6 +1689,13 @@ function App() {
 
       if (type === 'category') {
         setCategories((current) => current.filter((category) => category._id !== item._id))
+      }
+
+      if (type === 'decants') {
+        setDecantSettings((current) => ({
+          ...current,
+          isEnabled: false,
+        }))
       }
 
       if (type === 'product') {
@@ -1835,6 +1846,7 @@ function App() {
         method: 'PUT',
         body: JSON.stringify({
           sortOrder: decantSettings.sortOrder,
+          isEnabled: decantSettings.sizes.length > 0,
           sizes: decantSettings.sizes.map((size) => ({
             ...(size._id ? { _id: size._id } : {}),
             label: size.label,
@@ -2495,6 +2507,7 @@ function App() {
 
     const labels = {
       category: 'categoría',
+      decants: 'categoría Decants',
       product: 'publicación',
       shipping: 'destino de envío',
       coupon: 'cupón',
@@ -2702,7 +2715,7 @@ function App() {
                         {isExpanded ? 'Ocultar publicaciones' : 'Ver publicaciones de esta categoría'}
                       </span>
                     ) : (
-                      <span className="list-item__hint">Solo disponible para editar su posición en el storefront.</span>
+                      <span className="list-item__hint">Puedes ocultarla del catálogo desde Eliminar.</span>
                     )}
                   </div>
                   {!isDecantsCard ? (
@@ -2714,7 +2727,13 @@ function App() {
                         Eliminar
                       </button>
                     </div>
-                  ) : null}
+                  ) : (
+                    <div className="list-item__toolbar">
+                      <button type="button" className="list-item__delete" onClick={() => openDeleteModal('decants', category)}>
+                        Eliminar
+                      </button>
+                    </div>
+                  )}
 
                   {isExpanded ? (
                     <div className="category-linked-products">

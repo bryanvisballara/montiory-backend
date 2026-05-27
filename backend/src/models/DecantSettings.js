@@ -29,6 +29,10 @@ const decantSettingsSchema = new mongoose.Schema(
       default: 999,
       min: 0,
     },
+    isEnabled: {
+      type: Boolean,
+      default: false,
+    },
     sizes: {
       type: [decantSizeSchema],
       default: [],

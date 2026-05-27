@@ -45,7 +45,7 @@ async function getOrCreateSettings() {
   let settings = await DecantSettings.findOne({ key: 'default' })
 
   if (!settings) {
-    settings = await DecantSettings.create({ key: 'default', sizes: [] })
+    settings = await DecantSettings.create({ key: 'default', isEnabled: false, sizes: [] })
   }
 
   return settings
@@ -79,9 +79,22 @@ router.put(
 
     settings.sizes = sizes
     settings.sortOrder = sortOrder
+    settings.isEnabled = request.body?.isEnabled === undefined ? sizes.length > 0 : Boolean(request.body.isEnabled)
     await settings.save()
 
     response.json(settings.toObject())
+  }),
+)
+
+router.delete(
+  '/',
+  asyncHandler(async (_request, response) => {
+    const settings = await getOrCreateSettings()
+
+    settings.isEnabled = false
+    await settings.save()
+
+    response.status(204).send()
   }),
 )
 
