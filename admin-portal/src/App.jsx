@@ -1222,7 +1222,15 @@ function App() {
         apiRequest('/orders', { headers }),
         apiRequest('/preorders', { headers }),
         apiRequest('/coupons', { headers }),
-        isOperator ? Promise.resolve([]) : apiRequest('/promotions', { headers }),
+        isOperator
+          ? Promise.resolve([])
+          : apiRequest('/promotions', { headers }).catch((error) => {
+              if (error.message === 'Route not found') {
+                return []
+              }
+
+              throw error
+            }),
         isOperator ? Promise.resolve([]) : apiRequest('/partners', { headers }),
       ])
 
