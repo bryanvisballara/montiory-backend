@@ -14,6 +14,7 @@ import DecantSettings from '../models/DecantSettings.js'
 import Order from '../models/Order.js'
 import PreOrder from '../models/PreOrder.js'
 import Product from '../models/Product.js'
+import Promotion from '../models/Promotion.js'
 import ShippingZone from '../models/ShippingZone.js'
 
 const router = Router()
@@ -238,6 +239,8 @@ async function buildCheckoutContext({ customer, items, shippingZone, coupon, pay
       quantity: Number(item.quantity || 0),
       variantLabel: item.variantLabel?.trim() || '',
       decantSizeId: item.decantSizeId ? String(item.decantSizeId).trim() : '',
+      promoId: item.promoId ? String(item.promoId).trim() : '',
+      promoItems: Array.isArray(item.promoItems) ? item.promoItems : [],
     }))
     .filter((item) => item.productId && item.quantity > 0)
 
@@ -249,15 +252,29 @@ async function buildCheckoutContext({ customer, items, shippingZone, coupon, pay
     throw createHttpError(400, 'La ciudad de envío es obligatoria')
   }
 
-  const products = await Product.find({ _id: { $in: normalizedItemsInput.map((item) => item.productId) } })
+  const checkoutProductIds = [
+    ...new Set(
+      normalizedItemsInput.flatMap((item) => [
+        item.productId,
+        ...item.promoItems.map((promoItem) => String(promoItem.productId || '').trim()).filter(Boolean),
+      ]),
+    ),
+  ]
+  const products = await Product.find({ _id: { $in: checkoutProductIds } })
     .populate('category', 'name hasFreeShipping')
     .lean()
 
   const productMap = new Map(products.map((product) => [String(product._id), product]))
 
-  if (productMap.size !== new Set(normalizedItemsInput.map((item) => item.productId)).size) {
+  if (productMap.size !== checkoutProductIds.length) {
     throw createHttpError(404, 'Uno de los productos del checkout no existe')
   }
+
+  const promotions = await Promotion.find({
+    _id: { $in: normalizedItemsInput.map((item) => item.promoId).filter(Boolean) },
+    isActive: true,
+  }).lean()
+  const promotionMap = new Map(promotions.map((promotion) => [String(promotion._id), promotion]))
 
   const normalizedItems = normalizedItemsInput.map((item) => {
     const product = productMap.get(item.productId)
@@ -266,9 +283,82 @@ async function buildCheckoutContext({ customer, items, shippingZone, coupon, pay
       throw createHttpError(404, 'Uno de los productos del checkout no existe')
     }
 
-    let unitPrice = Number(product.offerPrice || 0)
+    if (item.promoId) {
+      const promotion = promotionMap.get(item.promoId)
+
+      if (!promotion) {
+        throw createHttpError(400, 'Una de las promociones del carrito ya no está disponible')
+      }
+
+      const promoItems = item.promoItems
+        .map((promoItem) => ({
+          productId: String(promoItem.productId || '').trim(),
+          name: String(promoItem.name || '').trim(),
+          sizeLabel: String(promoItem.sizeLabel || promoItem.variantLabel || '').trim(),
+        }))
+        .filter((promoItem) => promoItem.productId)
+
+      if (promoItems.length !== promotion.itemCount) {
+        throw createHttpError(400, `El combo de ${promotion.itemCount} prendas está incompleto`)
+      }
+
+      promoItems.forEach((promoItem) => {
+        const promoProduct = productMap.get(promoItem.productId)
+
+        if (!promoProduct) {
+          throw createHttpError(404, 'Uno de los productos del combo no existe')
+        }
+
+        const sizeOptions = Array.isArray(promoProduct.sizeOptions) ? promoProduct.sizeOptions : []
+
+        if (sizeOptions.length) {
+          const matchingSize = sizeOptions.find(
+            (sizeOption) => String(sizeOption.label || '').trim() === promoItem.sizeLabel,
+          )
+
+          if (!matchingSize) {
+            throw createHttpError(400, `Selecciona una talla para ${promoProduct.name}`)
+          }
+
+          if (Number(matchingSize.stock || 0) < 1) {
+            throw createHttpError(400, `No hay suficiente stock de ${promoProduct.name} en talla ${promoItem.sizeLabel}`)
+          }
+        }
+      })
+
+      return {
+        product: product._id,
+        productId: String(product._id),
+        name: `Combo ${promotion.itemCount} prendas`,
+        variantLabel: promoItems
+          .map((promoItem) => (promoItem.sizeLabel ? `${promoItem.name} · ${promoItem.sizeLabel}` : promoItem.name))
+          .join(' + '),
+        quantity: 1,
+        unitPrice: Number(promotion.price),
+        lineTotal: Number(promotion.price),
+        decantSizeId: null,
+        hasFreeShipping: promoItems.some((promoItem) => productHasFreeShipping(productMap.get(promoItem.productId))),
+      }
+    }
+
+    let unitPrice = Number(product.offerPrice || product.basePrice || 0)
     let variantLabel = item.variantLabel
     let decantSizeId = null
+    const sizeOptions = Array.isArray(product.sizeOptions) ? product.sizeOptions : []
+
+    if (sizeOptions.length && !item.decantSizeId) {
+      const matchingSize = sizeOptions.find(
+        (sizeOption) => String(sizeOption.label || '').trim() === variantLabel,
+      )
+
+      if (!matchingSize) {
+        throw createHttpError(400, `Selecciona una talla para ${product.name}`)
+      }
+
+      if (Number(matchingSize.stock || 0) < item.quantity) {
+        throw createHttpError(400, `No hay suficiente stock de ${product.name} en talla ${variantLabel}`)
+      }
+    }
 
     if (item.decantSizeId) {
       const decantPrice = (Array.isArray(product.decantPrices) ? product.decantPrices : []).find(
@@ -594,11 +684,12 @@ router.post(
 router.get(
   '/',
   asyncHandler(async (_request, response) => {
-    const [categories, products, shippingZones, decantSettings] = await Promise.all([
+    const [categories, products, shippingZones, decantSettings, promotions] = await Promise.all([
       Category.find({ isActive: true }).sort({ sortOrder: 1, createdAt: 1 }).lean(),
       Product.find({ isPublished: true }).populate('category', 'name hasFreeShipping').sort({ createdAt: -1 }).lean(),
       ShippingZone.find({ isActive: true }).sort({ place: 1 }).lean(),
       DecantSettings.findOne({ key: 'default' }).lean(),
+      Promotion.find({ isActive: true }).sort({ itemCount: 1, createdAt: 1 }).lean(),
     ])
 
     response.json({
@@ -606,6 +697,7 @@ router.get(
       products,
       shippingZones,
       decantSettings: decantSettings || { key: 'default', sortOrder: categories.length, sizes: [] },
+      promotions,
     })
   }),
 )

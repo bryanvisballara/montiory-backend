@@ -36,6 +36,32 @@ async function normalizeDecantPrices(rawDecantPrices) {
     })
 }
 
+function normalizeSizeOptions(rawSizeOptions) {
+  const sizeOptions = Array.isArray(rawSizeOptions) ? rawSizeOptions : []
+
+  return sizeOptions
+    .map((sizeOption) => {
+      const stockValue = String(sizeOption?.stock ?? '').trim()
+
+      return {
+        label: String(sizeOption?.label || '').trim(),
+        stock: stockValue === '' ? 0 : Number(stockValue),
+        hasStockInput: stockValue !== '',
+      }
+    })
+    .filter((sizeOption) => sizeOption.label && sizeOption.hasStockInput)
+    .map((sizeOption) => {
+      if (!Number.isFinite(sizeOption.stock) || sizeOption.stock < 0 || !Number.isInteger(sizeOption.stock)) {
+        throw createHttpError(400, 'El stock por talla debe ser un número entero mayor o igual a 0.')
+      }
+
+      return {
+        label: sizeOption.label,
+        stock: sizeOption.stock,
+      }
+    })
+}
+
 router.get(
   '/',
   asyncHandler(async (_request, response) => {
@@ -62,6 +88,10 @@ router.post(
     const rating = Number(request.body.rating ?? 0)
     const reviewCount = Number(request.body.reviewCount ?? 0)
     const imageUrls = Array.isArray(request.body.imageUrls) ? request.body.imageUrls : []
+    const sizeOptions = normalizeSizeOptions(request.body.sizeOptions)
+    const normalizedStock = sizeOptions.length
+      ? sizeOptions.reduce((totalStock, sizeOption) => totalStock + sizeOption.stock, 0)
+      : stock
     const hasFreeShipping = Boolean(request.body.hasFreeShipping)
     const decantPrices = await normalizeDecantPrices(request.body.decantPrices)
 
@@ -93,10 +123,11 @@ router.post(
       category: category.id,
       basePrice,
       offerPrice,
-      stock,
+      stock: normalizedStock,
       rating,
       reviewCount,
       imageUrls,
+      sizeOptions,
       hasFreeShipping,
       decantPrices,
     })
@@ -120,6 +151,10 @@ router.put(
     const rating = Number(request.body.rating ?? 0)
     const reviewCount = Number(request.body.reviewCount ?? 0)
     const imageUrls = Array.isArray(request.body.imageUrls) ? request.body.imageUrls : []
+    const sizeOptions = normalizeSizeOptions(request.body.sizeOptions)
+    const normalizedStock = sizeOptions.length
+      ? sizeOptions.reduce((totalStock, sizeOption) => totalStock + sizeOption.stock, 0)
+      : stock
     const hasFreeShipping = Boolean(request.body.hasFreeShipping)
     const decantPrices = await normalizeDecantPrices(request.body.decantPrices)
 
@@ -145,27 +180,26 @@ router.put(
       throw createHttpError(404, 'Category not found')
     }
 
-    const product = await Product.findByIdAndUpdate(
-      request.params.id,
-      {
-        name,
-        description,
-        category: category.id,
-        basePrice,
-        offerPrice,
-        stock,
-        rating,
-        reviewCount,
-        imageUrls,
-        hasFreeShipping,
-        decantPrices,
-      },
-      { new: true, runValidators: true },
-    )
+    const product = await Product.findById(request.params.id)
 
     if (!product) {
       throw createHttpError(404, 'Product not found')
     }
+
+    product.name = name
+    product.description = description
+    product.category = category.id
+    product.basePrice = basePrice
+    product.offerPrice = offerPrice
+    product.stock = normalizedStock
+    product.rating = rating
+    product.reviewCount = reviewCount
+    product.imageUrls = imageUrls
+    product.sizeOptions = sizeOptions
+    product.hasFreeShipping = hasFreeShipping
+    product.decantPrices = decantPrices
+    product.markModified('sizeOptions')
+    await product.save()
 
     const populatedProduct = await Product.findById(product.id).populate('category', 'name hasFreeShipping').lean()
     response.json(populatedProduct)

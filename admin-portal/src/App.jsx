@@ -31,6 +31,7 @@ const emptyProductForm = {
   basePrice: '',
   offerPrice: '',
   stock: '',
+  sizeOptions: [],
   rating: '',
   reviewCount: '',
   imageUrls: [],
@@ -60,6 +61,7 @@ const emptyMarketingForm = {
   message: '',
   channel: 'email',
 }
+const emptyPromotionForm = { itemCount: '2', price: '' }
 const emptyTrackingForm = { shippingCarrier: '', trackingNumber: '' }
 const emptyModalState = { type: '', mode: 'create', item: null }
 const emptyDeleteState = { type: '', item: null }
@@ -69,6 +71,7 @@ const navigationItems = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'categorias', label: 'Categorías' },
   { id: 'publicaciones', label: 'Publicaciones' },
+  { id: 'promociones', label: 'Promociones' },
   { id: 'envios', label: 'Envíos' },
   { id: 'cupones', label: 'Cupones' },
   { id: 'ordenes', label: 'Órdenes' },
@@ -107,6 +110,79 @@ function renderFreeShippingBadge(label = 'Envío gratis activo') {
       <span>{label}</span>
     </span>
   )
+}
+
+const DEFAULT_PRODUCT_SIZE_LABELS = ['XS', 'S', 'M', 'L', 'XL']
+
+function createDefaultProductSizeOptions() {
+  return DEFAULT_PRODUCT_SIZE_LABELS.map((label) => ({ label, stock: '' }))
+}
+
+function normalizeProductSizeOptionsForForm(sizeOptions) {
+  return (Array.isArray(sizeOptions) ? sizeOptions : []).map((sizeOption) => ({
+    label: sizeOption.label || '',
+    stock: String(sizeOption.stock ?? ''),
+  }))
+}
+
+function buildProductSizeOptionsForForm(sizeOptions) {
+  const saved = normalizeProductSizeOptionsForForm(sizeOptions)
+
+  if (!saved.length) {
+    return createDefaultProductSizeOptions()
+  }
+
+  const savedByLabel = new Map(
+    saved.map((sizeOption) => [sizeOption.label.trim().toUpperCase(), sizeOption]),
+  )
+  const defaultRows = DEFAULT_PRODUCT_SIZE_LABELS.map((label) => {
+    const match = savedByLabel.get(label.toUpperCase())
+    return match ? { label: match.label, stock: match.stock } : { label, stock: '' }
+  })
+  const extraRows = saved.filter(
+    (sizeOption) => !DEFAULT_PRODUCT_SIZE_LABELS.includes(sizeOption.label.trim().toUpperCase()),
+  )
+
+  return [...defaultRows, ...extraRows]
+}
+
+function formatProductSizeStockSummary(product) {
+  const sizeOptions = (Array.isArray(product?.sizeOptions) ? product.sizeOptions : [])
+    .map((sizeOption) => ({
+      label: String(sizeOption.label || '').trim(),
+      stock: Number(sizeOption.stock || 0),
+    }))
+    .filter((sizeOption) => sizeOption.label)
+
+  if (!sizeOptions.length) {
+    return ''
+  }
+
+  return sizeOptions.map((sizeOption) => `${sizeOption.label} ${sizeOption.stock}`).join(' · ')
+}
+
+function normalizeProductSizeOptionsForSubmit(sizeOptions) {
+  return (Array.isArray(sizeOptions) ? sizeOptions : [])
+    .map((sizeOption) => {
+      const stockValue = String(sizeOption.stock ?? '').trim()
+
+      return {
+        label: String(sizeOption.label || '').trim(),
+        stock: stockValue === '' ? 0 : Number(stockValue),
+        hasStockInput: stockValue !== '',
+      }
+    })
+    .filter((sizeOption) => sizeOption.label && sizeOption.hasStockInput)
+    .map((sizeOption) => {
+      if (!Number.isFinite(sizeOption.stock) || sizeOption.stock < 0 || !Number.isInteger(sizeOption.stock)) {
+        throw new Error('El stock por talla debe ser un entero mayor o igual a 0.')
+      }
+
+      return {
+        label: sizeOption.label,
+        stock: sizeOption.stock,
+      }
+    })
 }
 
 function formatDate(value) {
@@ -479,6 +555,8 @@ function App() {
   const [orders, setOrders] = useState([])
   const [preOrders, setPreOrders] = useState([])
   const [coupons, setCoupons] = useState([])
+  const [promotions, setPromotions] = useState([])
+  const [promotionForm, setPromotionForm] = useState(emptyPromotionForm)
   const [categoryForm, setCategoryForm] = useState(emptyCategoryForm)
   const [productForm, setProductForm] = useState(emptyProductForm)
   const [shippingForm, setShippingForm] = useState(emptyShippingForm)
@@ -803,6 +881,7 @@ function App() {
       setProductForm({
         ...emptyProductForm,
         categoryId: categories[0]?._id || '',
+        sizeOptions: createDefaultProductSizeOptions(),
       })
       setProductFiles([])
     }
@@ -814,6 +893,10 @@ function App() {
     if (type === 'coupon') {
       setCouponForm(emptyCouponForm)
       setCouponCategorySelection('')
+    }
+
+    if (type === 'promotion') {
+      setPromotionForm(emptyPromotionForm)
     }
 
     if (type === 'tracking') {
@@ -845,6 +928,7 @@ function App() {
         basePrice: String(item.basePrice ?? ''),
         offerPrice: String(item.offerPrice ?? ''),
         stock: String(item.stock ?? ''),
+        sizeOptions: buildProductSizeOptionsForForm(item.sizeOptions),
         rating: String(item.rating ?? 0),
         reviewCount: String(item.reviewCount ?? 0),
         imageUrls: item.imageUrls || [],
@@ -859,6 +943,13 @@ function App() {
         place: item.place,
         price: String(item.price ?? ''),
         eta: item.eta || '',
+      })
+    }
+
+    if (type === 'promotion') {
+      setPromotionForm({
+        itemCount: String(item.itemCount ?? '2'),
+        price: String(item.price ?? ''),
       })
     }
 
@@ -1071,6 +1162,29 @@ function App() {
     })
   }
 
+  function handleAddProductSizeOption() {
+    setProductForm((current) => ({
+      ...current,
+      sizeOptions: [...current.sizeOptions, { label: '', stock: '' }],
+    }))
+  }
+
+  function handleProductSizeOptionChange(index, field, value) {
+    setProductForm((current) => ({
+      ...current,
+      sizeOptions: current.sizeOptions.map((sizeOption, currentIndex) => (
+        currentIndex === index ? { ...sizeOption, [field]: value } : sizeOption
+      )),
+    }))
+  }
+
+  function handleRemoveProductSizeOption(index) {
+    setProductForm((current) => ({
+      ...current,
+      sizeOptions: current.sizeOptions.filter((_sizeOption, currentIndex) => currentIndex !== index),
+    }))
+  }
+
   async function loadDashboardData(activeToken = token, activeRole = adminRole) {
     setIsLoading(true)
 
@@ -1091,6 +1205,7 @@ function App() {
         setOrders([])
         setPreOrders([])
         setCoupons([])
+        setPromotions([])
         setPartners([])
         setSelectedPartnerId(partnerSnapshot.partner.id)
         setSelectedPartnerSnapshot(partnerSnapshot)
@@ -1098,7 +1213,7 @@ function App() {
         return
       }
 
-      const [categoryRows, decantRows, productRows, shippingRows, customerRows, orderRows, preOrderRows, couponRows, partnerRows] = await Promise.all([
+      const [categoryRows, decantRows, productRows, shippingRows, customerRows, orderRows, preOrderRows, couponRows, promotionRows, partnerRows] = await Promise.all([
         isOperator ? Promise.resolve([]) : apiRequest('/categories', { headers }),
         isOperator ? Promise.resolve(emptyDecantSettings) : apiRequest('/decants', { headers }),
         isOperator ? Promise.resolve([]) : apiRequest('/products', { headers }),
@@ -1107,6 +1222,7 @@ function App() {
         apiRequest('/orders', { headers }),
         apiRequest('/preorders', { headers }),
         apiRequest('/coupons', { headers }),
+        isOperator ? Promise.resolve([]) : apiRequest('/promotions', { headers }),
         isOperator ? Promise.resolve([]) : apiRequest('/partners', { headers }),
       ])
 
@@ -1118,6 +1234,7 @@ function App() {
       setOrders(orderRows)
       setPreOrders(preOrderRows)
       setCoupons(couponRows)
+      setPromotions(promotionRows)
       setPartners(partnerRows)
       setSelectedPartnerId((current) => {
         if (current && partnerRows.some((partner) => partner.id === current)) {
@@ -1346,6 +1463,10 @@ function App() {
       const offerPrice = Number(productForm.offerPrice)
       const rating = Number(productForm.rating || 0)
       const reviewCount = Number(productForm.reviewCount || 0)
+      const sizeOptions = normalizeProductSizeOptionsForSubmit(productForm.sizeOptions)
+      const stock = sizeOptions.length
+        ? sizeOptions.reduce((totalStock, sizeOption) => totalStock + sizeOption.stock, 0)
+        : Number(productForm.stock)
 
       if (basePrice <= offerPrice) {
         throw new Error('El precio base debe ser mayor al precio oferta.')
@@ -1372,7 +1493,8 @@ function App() {
           ...productForm,
           basePrice,
           offerPrice,
-          stock: Number(productForm.stock),
+          stock,
+          sizeOptions,
           rating,
           reviewCount,
           imageUrls,
@@ -1388,6 +1510,7 @@ function App() {
       setProductForm({
         ...emptyProductForm,
         categoryId: categories[0]?._id || productForm.categoryId,
+        sizeOptions: createDefaultProductSizeOptions(),
       })
       setProductFiles([])
       closeModal()
@@ -1550,6 +1673,42 @@ function App() {
     }
   }
 
+  async function handlePromotionSubmit(event) {
+    event.preventDefault()
+
+    try {
+      const itemCount = Number(promotionForm.itemCount)
+      const price = Number(promotionForm.price)
+
+      if (!Number.isInteger(itemCount) || itemCount < 2) {
+        throw new Error('La promoción debe incluir al menos 2 prendas.')
+      }
+
+      if (!Number.isInteger(price) || price < 1) {
+        throw new Error('El precio de la promoción debe ser un entero mayor o igual a 1.')
+      }
+
+      const isEdit = modalState.mode === 'edit' && modalState.type === 'promotion'
+      const savedPromotion = await apiRequest(isEdit ? `/promotions/${modalState.item._id}` : '/promotions', {
+        method: isEdit ? 'PUT' : 'POST',
+        body: JSON.stringify({ itemCount, price }),
+      })
+
+      setPromotions((current) => {
+        const nextPromotions = isEdit
+          ? current.map((promotion) => (promotion._id === savedPromotion._id ? savedPromotion : promotion))
+          : [...current, savedPromotion]
+
+        return nextPromotions.sort((left, right) => left.itemCount - right.itemCount)
+      })
+      setPromotionForm(emptyPromotionForm)
+      closeModal()
+      showSuccess(isEdit ? 'Promoción actualizada correctamente.' : 'Promoción creada correctamente.')
+    } catch (error) {
+      setDashboardMessage(error.message)
+    }
+  }
+
   async function handleCouponSubmit(event) {
     event.preventDefault()
 
@@ -1684,6 +1843,7 @@ function App() {
       product: 'esta publicación',
       shipping: 'este destino',
       coupon: 'este cupón',
+      promotion: 'esta promoción',
     }
 
     try {
@@ -1693,6 +1853,7 @@ function App() {
         product: `/products/${item._id}`,
         shipping: `/shipping-zones/${item._id}`,
         coupon: `/coupons/${item._id}`,
+        promotion: `/promotions/${item._id}`,
       }
 
       await apiRequest(paths[type], { method: 'DELETE' })
@@ -1718,6 +1879,10 @@ function App() {
 
       if (type === 'coupon') {
         setCoupons((current) => current.filter((coupon) => coupon._id !== item._id))
+      }
+
+      if (type === 'promotion') {
+        setPromotions((current) => current.filter((promotion) => promotion._id !== item._id))
       }
 
       closeDeleteModal()
@@ -2061,12 +2226,63 @@ function App() {
                   type="number"
                   min="0"
                   value={productForm.stock}
+                  disabled={productForm.sizeOptions.length > 0}
                   onChange={(event) =>
                     setProductForm((current) => ({ ...current, stock: event.target.value }))
                   }
-                  placeholder="Stock disponible"
+                  placeholder={productForm.sizeOptions.length ? 'Se calcula desde las tallas' : 'Stock disponible'}
                 />
               </label>
+              <section className="size-options-editor grid-form__field--wide">
+                <div className="size-options-editor__header">
+                  <div>
+                    <span>Tallaje y stock por talla</span>
+                    <p>
+                      {productForm.sizeOptions.some((sizeOption) => String(sizeOption.stock ?? '').trim() !== '')
+                        ? `Stock total calculado: ${productForm.sizeOptions.reduce((totalStock, sizeOption) => totalStock + (Number(sizeOption.stock) || 0), 0)} und`
+                        : 'Escribe cuántas unidades hay de XS, S, M, L y XL. Solo se guardan las tallas que llenes.'}
+                    </p>
+                  </div>
+                  <button type="button" className="size-options-editor__add" onClick={handleAddProductSizeOption}>
+                    Agregar talla
+                  </button>
+                </div>
+                {productForm.sizeOptions.length ? (
+                  <div className="size-options-editor__rows">
+                    {productForm.sizeOptions.map((sizeOption, index) => (
+                      <div key={`size-option-${index}`} className="size-options-editor__row">
+                        <label>
+                          <span>Talla</span>
+                          <input
+                            type="text"
+                            value={sizeOption.label}
+                            onChange={(event) => handleProductSizeOptionChange(index, 'label', event.target.value)}
+                            placeholder="Ej. S, M, L, 37, 38"
+                          />
+                        </label>
+                        <label>
+                          <span>Stock</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={sizeOption.stock}
+                            onChange={(event) => handleProductSizeOptionChange(index, 'stock', event.target.value)}
+                            placeholder="0"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="size-options-editor__remove"
+                          onClick={() => handleRemoveProductSizeOption(index)}
+                        >
+                          Quitar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
               <label className="toggle-field">
                 <span>Rating</span>
                 <input
@@ -2214,6 +2430,51 @@ function App() {
                 placeholder="Número de seguimiento"
               />
               <button type="submit">Guardar tracking y notificar</button>
+            </form>
+          </div>
+        </div>
+      )
+    }
+
+    if (modalState.type === 'promotion') {
+      return (
+        <div className="modal-backdrop" onClick={closeModal}>
+          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <p className="eyebrow">Promociones</p>
+                <h3>{isEdit ? 'Modificar promoción' : 'Crear nueva promoción'}</h3>
+              </div>
+              <button type="button" className="modal-close" onClick={closeModal}>Cerrar</button>
+            </div>
+            <form className="stack-form" onSubmit={handlePromotionSubmit}>
+              <label className="toggle-field">
+                <span>Cantidad de prendas</span>
+                <input
+                  type="number"
+                  min="2"
+                  step="1"
+                  value={promotionForm.itemCount}
+                  onChange={(event) =>
+                    setPromotionForm((current) => ({ ...current, itemCount: event.target.value }))
+                  }
+                  placeholder="Ej. 2, 3, 4"
+                />
+              </label>
+              <label className="toggle-field">
+                <span>Precio del combo</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={promotionForm.price}
+                  onChange={(event) =>
+                    setPromotionForm((current) => ({ ...current, price: event.target.value }))
+                  }
+                  placeholder="Precio total COP"
+                />
+              </label>
+              <button type="submit">{isEdit ? 'Guardar cambios' : 'Crear promoción'}</button>
             </form>
           </div>
         </div>
@@ -2521,12 +2782,14 @@ function App() {
       product: 'publicación',
       shipping: 'destino de envío',
       coupon: 'cupón',
+      promotion: 'promoción',
     }
 
     const itemName =
       deleteState.item.name ||
       deleteState.item.place ||
       deleteState.item.trackingNumber ||
+      (deleteState.type === 'promotion' ? `${deleteState.item.itemCount} prendas` : '') ||
       'este registro'
 
     return (
@@ -2836,7 +3099,12 @@ function App() {
                     {formatCurrency(product.offerPrice)}
                     <small className="table-row__subcopy">Base {formatCurrency(product.basePrice)}</small>
                   </span>
-                  <span>{product.stock || 0} und</span>
+                  <span>
+                    {product.stock || 0} und
+                    {formatProductSizeStockSummary(product) ? (
+                      <small className="table-row__subcopy">{formatProductSizeStockSummary(product)}</small>
+                    ) : null}
+                  </span>
                   <div className="row-actions">
                     <button type="button" className="table-row__edit" onClick={() => openEditModal('product', product)}>
                       Modificar
@@ -2848,6 +3116,54 @@ function App() {
                 </div>
               ))}
             </div>
+          </article>
+        </section>
+      )
+    }
+
+    if (activePage === 'promociones') {
+      return (
+        <section className="admin-section">
+          {dashboardMessage ? <p className="status-note">{dashboardMessage}</p> : null}
+          <article className="admin-card">
+            <div className="section-header">
+              <div className="card-heading">
+                <p className="eyebrow">Módulo 03</p>
+                <h3>Promociones</h3>
+                <p>
+                  Define combos por cantidad de prendas. Ejemplo: 2 prendas a un precio, 3 a otro,
+                  y el cliente arma el combo a su manera en la tienda.
+                </p>
+              </div>
+              <button type="button" onClick={() => openCreateModal('promotion')}>
+                Crear nueva promoción
+              </button>
+            </div>
+
+            <div className="table-list">
+              {promotions.map((promotion) => (
+                <div key={promotion._id} className="table-row table-row--promo">
+                  <div className="table-row__product-copy">
+                    <strong>{promotion.itemCount} prendas</strong>
+                    <span className="table-row__description">
+                      Si el cliente elige {promotion.itemCount} prendas, el combo queda en {formatCurrency(promotion.price)}.
+                    </span>
+                  </div>
+                  <span>{formatCurrency(promotion.price)}</span>
+                  <span>{promotion.isActive === false ? 'Inactiva' : 'Activa'}</span>
+                  <div className="row-actions">
+                    <button type="button" className="table-row__edit" onClick={() => openEditModal('promotion', promotion)}>
+                      Modificar
+                    </button>
+                    <button type="button" className="table-row__delete" onClick={() => openDeleteModal('promotion', promotion)}>
+                      Eliminar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {!promotions.length ? <p className="empty-state">Todavía no hay promociones creadas.</p> : null}
           </article>
         </section>
       )

@@ -15,6 +15,23 @@ const productDecantPriceSchema = new mongoose.Schema(
   { _id: false },
 )
 
+const productSizeOptionSchema = new mongoose.Schema(
+  {
+    label: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    stock: {
+      type: Number,
+      required: true,
+      min: 0,
+      default: 0,
+    },
+  },
+  { _id: false },
+)
+
 const productSchema = new mongoose.Schema(
   {
     name: {
@@ -75,6 +92,10 @@ const productSchema = new mongoose.Schema(
     },
     imageUrls: {
       type: [String],
+      default: [],
+    },
+    sizeOptions: {
+      type: [productSizeOptionSchema],
       default: [],
     },
     decantPrices: {

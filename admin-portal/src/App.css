@@ -718,6 +718,10 @@ button,
   grid-template-columns: 2.2fr 1fr 0.8fr 0.8fr auto;
 }
 
+.table-row--promo {
+  grid-template-columns: 2.2fr 1fr 0.8fr auto;
+}
+
 .table-row > .row-actions {
   grid-column: 5;
   justify-self: end;
@@ -1396,6 +1400,79 @@ button,
 
 .section-helper--tight {
   margin-top: -8px;
+}
+
+.size-options-editor {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(29, 27, 24, 0.12);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.size-options-editor__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: start;
+}
+
+.size-options-editor__header div {
+  display: grid;
+  gap: 6px;
+}
+
+.size-options-editor__header span,
+.size-options-editor__row label span {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.size-options-editor__header p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.grid-form .size-options-editor button {
+  grid-column: auto;
+}
+
+.size-options-editor__add,
+.size-options-editor__remove {
+  white-space: nowrap;
+}
+
+.size-options-editor__add {
+  padding: 10px 14px;
+  border-radius: 14px;
+}
+
+.size-options-editor__rows {
+  display: grid;
+  gap: 10px;
+}
+
+.size-options-editor__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.size-options-editor__row label {
+  display: grid;
+  gap: 8px;
+}
+
+.size-options-editor__remove {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(29, 27, 24, 0.14);
+  color: var(--text-primary);
+  box-shadow: none;
 }
 
 .toggle-field {

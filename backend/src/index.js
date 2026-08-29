@@ -15,6 +15,7 @@ import couponRouter from './routes/coupon.routes.js'
 import decantRouter from './routes/decant.routes.js'
 import marketingRouter from './routes/marketing.routes.js'
 import partnerRouter from './routes/partner.routes.js'
+import promotionRouter from './routes/promotion.routes.js'
 import uploadRouter from './routes/upload.routes.js'
 import { seedAdminUsers } from './services/seed-admin.js'
 
@@ -29,6 +30,8 @@ const defaultAllowedOrigins = [
   'http://127.0.0.1:5173',
   'http://localhost:5174',
   'http://127.0.0.1:5174',
+  'http://localhost:5175',
+  'http://127.0.0.1:5175',
 ]
 
 const allowedOrigins = [...defaultAllowedOrigins, ...(process.env.CLIENT_URL || '')
@@ -61,6 +64,7 @@ app.use('/api/coupons', couponRouter)
 app.use('/api/decants', decantRouter)
 app.use('/api/marketing', marketingRouter)
 app.use('/api/partners', partnerRouter)
+app.use('/api/promotions', promotionRouter)
 app.use('/api/uploads', uploadRouter)
 app.use('/api/storefront', publicRouter)
 

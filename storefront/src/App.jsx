@@ -5,8 +5,9 @@ import './App.css'
 const isLocalHost = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
 const apiBaseUrl = import.meta.env.VITE_API_URL || (isLocalHost ? 'http://localhost:10000/api' : 'https://montiory-backend.onrender.com/api')
 const brandLogoUrl = `${import.meta.env.BASE_URL}montiory-logo.jpg`
-const whatsappPhoneNumber = '573001767364'
-const defaultWhatsAppMessage = 'Hola, estoy interesado en comprar sus productos. ¿Podrías darme más información?'
+const instagramUrl = 'https://www.instagram.com/montiory.co?igsh=MWN6a2w3Y245MGNwOA=='
+const whatsappPhoneNumber = '573007266022'
+const defaultWhatsAppMessage = 'Hola Montiory, estoy interesado en sus productos. ¿Podrías darme más información?'
 const fallbackImage =
   'https://images.unsplash.com/photo-1594035910387-fea47794261f?auto=format&fit=crop&w=900&q=80'
 const otherShippingOptionId = '__other__'
@@ -219,9 +220,61 @@ function getVisibleDecantPrices(product, decantSettings) {
     .filter(Boolean)
 }
 
+const FILTERABLE_SIZE_LABELS = ['XS', 'S', 'M', 'L', 'XL']
+
+function getVisibleSizeOptions(product) {
+  return (Array.isArray(product?.sizeOptions) ? product.sizeOptions : [])
+    .map((sizeOption) => ({
+      label: String(sizeOption.label || '').trim(),
+      stock: Number(sizeOption.stock || 0),
+    }))
+    .filter((sizeOption) => sizeOption.label)
+}
+
+function productHasAnySelectedSizeInStock(product, selectedSizes) {
+  if (!selectedSizes.length) {
+    return true
+  }
+
+  const availableLabels = new Set(
+    getVisibleSizeOptions(product)
+      .filter((sizeOption) => sizeOption.stock > 0)
+      .map((sizeOption) => sizeOption.label.toUpperCase()),
+  )
+
+  return selectedSizes.some((label) => availableLabels.has(String(label).toUpperCase()))
+}
+
+function getComboSelectableSizes(product, selectedSizeFilters) {
+  const inStockSizes = getVisibleSizeOptions(product).filter((sizeOption) => sizeOption.stock > 0)
+
+  if (!selectedSizeFilters.length) {
+    return inStockSizes
+  }
+
+  const filterLabels = new Set(selectedSizeFilters.map((label) => String(label).toUpperCase()))
+
+  return inStockSizes.filter((sizeOption) => filterLabels.has(sizeOption.label.toUpperCase()))
+}
+
+function getProductDisplayPrices(product) {
+  const basePrice = Number(product?.basePrice || 0)
+  const offerPrice = Number(product?.offerPrice || 0)
+  const hasOffer = offerPrice > 0 && basePrice > offerPrice
+
+  return {
+    compareAtPrice: hasOffer ? basePrice : null,
+    salePrice: hasOffer ? offerPrice : (basePrice > 0 ? basePrice : offerPrice),
+  }
+}
+
 function buildCartItemKey(productId, variant = null) {
   if (variant?.kind === 'decant' && variant.sizeId) {
     return `decant:${productId}:${variant.sizeId}`
+  }
+
+  if (variant?.kind === 'size' && variant.sizeLabel) {
+    return `size:${productId}:${variant.sizeLabel}`
   }
 
   return `product:${productId}`
@@ -311,7 +364,11 @@ function useCartConfirmation() {
   }
 }
 
-function CartConfirmationModal({ productName, confirmationState }) {
+function formatPromotionLabel(promotion, formatCurrencyValue) {
+  return `${promotion.itemCount} prendas · ${formatCurrencyValue(promotion.price)}`
+}
+
+function CartConfirmationModal({ productName, confirmationState, message }) {
   if (typeof document === 'undefined') {
     return null
   }
@@ -330,7 +387,7 @@ function CartConfirmationModal({ productName, confirmationState }) {
         </div>
         <span className="cart-confirmation-modal__eyebrow">Añadido con éxito</span>
         <h2>Producto agregado</h2>
-        <p>{productName} ya está en tu carrito.</p>
+        <p>{message || `${productName} ya está en tu carrito.`}</p>
       </div>
     </div>,
     document.body,
@@ -972,16 +1029,18 @@ function CartSidebar({
 
                   <div className="cart-sidebar__copy">
                     <strong>{item.displayName}</strong>
-                    <span>{formatCurrency(item.unitPrice)} x {item.quantity}</span>
-                    <div className="cart-quantity cart-quantity--sidebar">
-                      <button type="button" onClick={() => onDecrease(item.cartKey)} aria-label={`Reducir cantidad de ${item.displayName}`}>
-                        -
-                      </button>
-                      <span>{item.quantity}</span>
-                      <button type="button" onClick={() => onIncrease(item.cartKey)} aria-label={`Aumentar cantidad de ${item.displayName}`}>
-                        +
-                      </button>
-                    </div>
+                    {item.isPromoCombo ? <span>{item.sizeLabel}</span> : <span>{formatCurrency(item.unitPrice)} x {item.quantity}</span>}
+                    {item.isPromoCombo ? null : (
+                      <div className="cart-quantity cart-quantity--sidebar">
+                        <button type="button" onClick={() => onDecrease(item.cartKey)} aria-label={`Reducir cantidad de ${item.displayName}`}>
+                          -
+                        </button>
+                        <span>{item.quantity}</span>
+                        <button type="button" onClick={() => onIncrease(item.cartKey)} aria-label={`Aumentar cantidad de ${item.displayName}`}>
+                          +
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <strong className="cart-sidebar__line-total">{formatCurrency(item.lineTotal)}</strong>
@@ -1120,15 +1179,21 @@ function CartPage({ items, subtotalAmount, onBack, onIncrease, onDecrease, onRem
               </button>
 
               <div className="cart-item__copy">
-                <span>{item.product.category?.name || 'Selección Montiory'}</span>
+                <span>{item.isPromoCombo ? 'Promoción' : (item.product.category?.name || 'Selección Montiory')}</span>
                 <strong>{item.displayName}</strong>
+                {item.isPromoCombo ? <small>{item.sizeLabel}</small> : null}
               </div>
 
               <div className="cart-item__price">
-                <span>{item.isDecantVariant ? formatCurrency(item.unitPrice) : formatCurrency(item.product.basePrice)}</span>
+                {item.isPromoCombo ? null : (
+                  <span>{item.isDecantVariant ? formatCurrency(item.unitPrice) : formatCurrency(item.product.basePrice)}</span>
+                )}
                 <strong>{formatCurrency(item.unitPrice)}</strong>
               </div>
 
+              {item.isPromoCombo ? (
+                <span className="cart-item__combo-qty">{item.promoItems?.length || item.quantity} prendas</span>
+              ) : (
               <div className="cart-quantity">
                 <button type="button" onClick={() => onDecrease(item.cartKey)} aria-label={`Reducir cantidad de ${item.displayName}`}>
                   -
@@ -1138,6 +1203,7 @@ function CartPage({ items, subtotalAmount, onBack, onIncrease, onDecrease, onRem
                   +
                 </button>
               </div>
+              )}
 
               <strong className="cart-item__total">{formatCurrency(item.lineTotal)}</strong>
             </article>
@@ -1158,11 +1224,81 @@ function CartPage({ items, subtotalAmount, onBack, onIncrease, onDecrease, onRem
   )
 }
 
-function ProductDetailView({ product, onBack, onAddToCart, onBuyNow, onOpenFullProduct, isQuickView = false }) {
+function ProductDetailView({
+  product,
+  onBack,
+  onAddToCart,
+  onBuyNow,
+  onOpenFullProduct,
+  isQuickView = false,
+  comboMode = false,
+  selectedSizeFilters = [],
+}) {
   const ratingData = getProductRatingData(product)
   const deliveryEstimate = formatDeliveryEstimate()
+  const displayPrices = getProductDisplayPrices(product)
   const [isQuickDescriptionExpanded, setIsQuickDescriptionExpanded] = useState(false)
+  const [selectedSizeLabel, setSelectedSizeLabel] = useState('')
+  const [sizeError, setSizeError] = useState('')
   const productDescription = product.description || 'Una selección original con presencia elegante y salida memorable para quienes buscan una firma olfativa distinta.'
+  const sizeOptions = getVisibleSizeOptions(product)
+  const selectableComboSizes = getComboSelectableSizes(product, selectedSizeFilters)
+  const availableStock = sizeOptions.length
+    ? sizeOptions.reduce((totalStock, sizeOption) => totalStock + sizeOption.stock, 0)
+    : Number(product.stock || 0)
+
+  useEffect(() => {
+    const defaultSize = comboMode && selectableComboSizes.length === 1
+      ? selectableComboSizes[0].label
+      : ''
+    setSelectedSizeLabel(defaultSize)
+    setSizeError('')
+  }, [product._id, comboMode, selectedSizeFilters.join('|')])
+
+  function resolveSizeVariant() {
+    if (!sizeOptions.length) {
+      return null
+    }
+
+    const allowedSizes = comboMode ? selectableComboSizes : sizeOptions
+    const selectedSize = allowedSizes.find((sizeOption) => sizeOption.label === selectedSizeLabel)
+
+    if (!selectedSize) {
+      setSizeError(comboMode ? 'Selecciona una talla para agregarla al combo.' : 'Selecciona una talla para continuar.')
+      return undefined
+    }
+
+    if (selectedSize.stock <= 0) {
+      setSizeError('Esa talla está agotada.')
+      return undefined
+    }
+
+    setSizeError('')
+    return {
+      kind: 'size',
+      sizeLabel: selectedSize.label,
+    }
+  }
+
+  function handleAddToCartClick() {
+    const variant = resolveSizeVariant()
+
+    if (variant === undefined) {
+      return
+    }
+
+    onAddToCart(1, variant)
+  }
+
+  function handleBuyNowClick() {
+    const variant = resolveSizeVariant()
+
+    if (variant === undefined) {
+      return
+    }
+
+    onBuyNow(product, variant)
+  }
 
   return (
     <section className={isQuickView ? 'product-detail product-detail--modal' : 'product-detail'}>
@@ -1182,12 +1318,48 @@ function ProductDetailView({ product, onBack, onAddToCart, onBuyNow, onOpenFullP
 
           <div className="detail-panel__stock">
             <span>Disponibilidad</span>
-            <strong>{product.stock > 0 ? 'En stock' : 'Bajo pedido'}</strong>
+            <strong>{availableStock > 0 ? 'En stock' : 'Bajo pedido'}</strong>
           </div>
 
+          {sizeOptions.length ? (
+            <div className="detail-size-stock">
+              <span>{comboMode ? 'Tallas disponibles para el combo' : 'Elige tu talla'}</span>
+              <div className="detail-size-stock__grid">
+                {sizeOptions.map((sizeOption) => {
+                  const isSelected = selectedSizeLabel === sizeOption.label
+                  const isEmpty = sizeOption.stock <= 0
+                  const matchesFilter = !selectedSizeFilters.length || selectedSizeFilters.some((label) => label.toUpperCase() === sizeOption.label.toUpperCase())
+                  const isDisabled = isEmpty || (comboMode && !matchesFilter)
+
+                  return (
+                    <button
+                      key={sizeOption.label}
+                      type="button"
+                      className={[
+                        'detail-size-stock__item',
+                        isEmpty ? 'detail-size-stock__item--empty' : '',
+                        comboMode && matchesFilter && !isEmpty ? 'detail-size-stock__item--match' : '',
+                        isSelected ? 'detail-size-stock__item--selected' : '',
+                      ].filter(Boolean).join(' ')}
+                      disabled={isDisabled}
+                      onClick={() => {
+                        setSelectedSizeLabel(sizeOption.label)
+                        setSizeError('')
+                      }}
+                    >
+                      <strong>{sizeOption.label}</strong>
+                      <small>{isEmpty ? 'Agotada' : matchesFilter || !comboMode ? `${sizeOption.stock} und` : 'Otra talla'}</small>
+                    </button>
+                  )
+                })}
+              </div>
+              {sizeError ? <p className="detail-size-stock__error">{sizeError}</p> : null}
+            </div>
+          ) : null}
+
           <div className="detail-price">
-            <span>{formatCurrency(product.basePrice)}</span>
-            <strong>{formatCurrency(product.offerPrice)}</strong>
+            {displayPrices.compareAtPrice != null ? <span>{formatCurrency(displayPrices.compareAtPrice)}</span> : null}
+            <strong>{formatCurrency(displayPrices.salePrice)}</strong>
           </div>
 
           <p className={isQuickView && !isQuickDescriptionExpanded ? 'detail-description detail-description--clamped' : 'detail-description'}>
@@ -1205,19 +1377,27 @@ function ProductDetailView({ product, onBack, onAddToCart, onBuyNow, onOpenFullP
           ) : null}
 
           <div className="detail-actions">
-            <button type="button" className="button-secondary detail-action" onClick={() => onAddToCart(product._id, 1)}>
-              Agregar al carrito
-            </button>
-            <button
-              type="button"
-              className="button-primary detail-action"
-              onClick={() => onBuyNow(product)}
-            >
-              Comprar ahora
-            </button>
+            {comboMode ? (
+              <button type="button" className="button-primary detail-action" onClick={handleAddToCartClick}>
+                Agregar al combo
+              </button>
+            ) : (
+              <>
+                <button type="button" className="button-secondary detail-action" onClick={handleAddToCartClick}>
+                  Agregar al carrito
+                </button>
+                <button
+                  type="button"
+                  className="button-primary detail-action"
+                  onClick={handleBuyNowClick}
+                >
+                  Comprar ahora
+                </button>
+              </>
+            )}
           </div>
 
-          {isQuickView ? (
+          {isQuickView && !comboMode ? (
             <button type="button" className="detail-more-link" onClick={() => onOpenFullProduct(product)}>
               Abrir ficha completa
             </button>
@@ -1233,7 +1413,17 @@ function ProductDetailView({ product, onBack, onAddToCart, onBuyNow, onOpenFullP
   )
 }
 
-function QuickViewModal({ product, onClose, onAddToCart, onBuyNow, onOpenFullProduct, isConfirmationVisible, onCloseConfirmation }) {
+function QuickViewModal({
+  product,
+  onClose,
+  onAddToCart,
+  onBuyNow,
+  onOpenFullProduct,
+  isConfirmationVisible,
+  onCloseConfirmation,
+  comboMode = false,
+  selectedSizeFilters = [],
+}) {
 
   useEffect(() => {
     function handleEscape(event) {
@@ -1262,10 +1452,15 @@ function QuickViewModal({ product, onClose, onAddToCart, onBuyNow, onOpenFullPro
   }
 
   return createPortal(
-    <div className="quick-view-modal" role="dialog" aria-modal="true" aria-label={`Vista rápida de ${product.name}`}>
-      <button type="button" className="quick-view-modal__backdrop" onClick={onClose} aria-label="Cerrar vista rápida" />
+    <div
+      className={comboMode ? 'quick-view-modal quick-view-modal--preview' : 'quick-view-modal'}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Vista previa de ${product.name}`}
+    >
+      <button type="button" className="quick-view-modal__backdrop" onClick={onClose} aria-label="Cerrar vista previa" />
       <div className="quick-view-modal__panel">
-        <button type="button" className="quick-view-modal__close" onClick={onClose} aria-label="Cerrar vista rápida">
+        <button type="button" className="quick-view-modal__close" onClick={onClose} aria-label="Cerrar vista previa">
           ×
         </button>
         <ProductDetailView
@@ -1274,10 +1469,354 @@ function QuickViewModal({ product, onClose, onAddToCart, onBuyNow, onOpenFullPro
           onBuyNow={onBuyNow}
           onOpenFullProduct={onOpenFullProduct}
           isQuickView
+          comboMode={comboMode}
+          selectedSizeFilters={selectedSizeFilters}
         />
       </div>
     </div>,
     document.body,
+  )
+}
+
+function SizeFilterChip({ selectedSizes, onToggleSize, onClear, isOpen, onOpenChange }) {
+  const rootRef = useRef(null)
+  const hasSelection = selectedSizes.length > 0
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined
+    }
+
+    function handlePointerDown(event) {
+      if (!rootRef.current?.contains(event.target)) {
+        onOpenChange(false)
+      }
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        onOpenChange(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen, onOpenChange])
+
+  return (
+    <div ref={rootRef} className="size-filter">
+      <button
+        type="button"
+        className={hasSelection || isOpen ? 'chip chip--active' : 'chip'}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        onClick={() => onOpenChange(!isOpen)}
+      >
+        <span className="chip__content">
+          <span>Filtra por tallas disponibles</span>
+          {hasSelection ? <small className="size-filter__count">{selectedSizes.join(' · ')}</small> : null}
+        </span>
+      </button>
+      {isOpen ? (
+        <div className="size-filter__menu" role="listbox" aria-label="Tallas disponibles" aria-multiselectable="true">
+          {FILTERABLE_SIZE_LABELS.map((label) => {
+            const isSelected = selectedSizes.includes(label)
+
+            return (
+              <button
+                key={label}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                className={isSelected ? 'size-filter__option size-filter__option--active' : 'size-filter__option'}
+                onClick={() => onToggleSize(label)}
+              >
+                {label}
+              </button>
+            )
+          })}
+          {hasSelection ? (
+            <button type="button" className="size-filter__clear" onClick={onClear}>
+              Limpiar
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function PromoFilterChip({ promotions, selectedPromoId, selectedSizes, isOpen, onOpenChange, onSearch, onClear }) {
+  const rootRef = useRef(null)
+  const [draftPromoId, setDraftPromoId] = useState(selectedPromoId)
+  const [draftSizes, setDraftSizes] = useState(selectedSizes)
+  const selectedPromo = promotions.find((promotion) => promotion._id === selectedPromoId) || null
+  const draftPromo = promotions.find((promotion) => promotion._id === draftPromoId) || null
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined
+    }
+
+    setDraftPromoId(selectedPromoId)
+    setDraftSizes(selectedSizes)
+
+    function handlePointerDown(event) {
+      if (!rootRef.current?.contains(event.target)) {
+        onOpenChange(false)
+      }
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        onOpenChange(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen, onOpenChange, selectedPromoId, selectedSizes])
+
+  if (!promotions.length) {
+    return null
+  }
+
+  return (
+    <div ref={rootRef} className="size-filter promo-filter">
+      <button
+        type="button"
+        className={selectedPromo || isOpen ? 'chip chip--active' : 'chip'}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        onClick={() => onOpenChange(!isOpen)}
+      >
+        <span className="chip__content">
+          <span>Promociones</span>
+          {selectedPromo ? (
+            <small className="size-filter__count">
+              {selectedPromo.itemCount} prendas{selectedSizes.length ? ` · ${selectedSizes.join(' · ')}` : ''}
+            </small>
+          ) : null}
+        </span>
+      </button>
+      {isOpen ? (
+        <div className="size-filter__menu promo-filter__menu" role="listbox" aria-label="Promociones disponibles">
+          {promotions.map((promotion) => {
+            const isSelected = draftPromoId === promotion._id
+
+            return (
+              <button
+                key={promotion._id}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                className={isSelected ? 'size-filter__option size-filter__option--active' : 'size-filter__option'}
+                onClick={() => setDraftPromoId(promotion._id)}
+              >
+                {formatPromotionLabel(promotion, formatCurrency)}
+              </button>
+            )
+          })}
+          {draftPromo ? (
+            <div className="promo-filter__sizes">
+              <span>Elige las tallas</span>
+              <div className="promo-filter__size-row">
+                {FILTERABLE_SIZE_LABELS.map((label) => {
+                  const isSelected = draftSizes.includes(label)
+
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      className={isSelected ? 'size-filter__option size-filter__option--active' : 'size-filter__option'}
+                      onClick={() => {
+                        setDraftSizes((current) => (
+                          current.includes(label)
+                            ? current.filter((sizeLabel) => sizeLabel !== label)
+                            : [...current, label]
+                        ))
+                      }}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+              <button
+                type="button"
+                className="promo-filter__search"
+                onClick={() => onSearch(draftPromo, draftSizes)}
+              >
+                Buscar combo
+              </button>
+            </div>
+          ) : null}
+          {selectedPromo ? (
+            <button type="button" className="size-filter__clear" onClick={onClear}>
+              Limpiar
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function ComboProductCard({
+  product,
+  index,
+  selectedSizeFilters,
+  isComboFull,
+  onOpenPreview,
+  onAddToCombo,
+}) {
+  const ratingData = getProductRatingData(product)
+  const sizeOptions = getVisibleSizeOptions(product)
+  const selectableSizes = getComboSelectableSizes(product, selectedSizeFilters)
+  const [selectedSizeLabel, setSelectedSizeLabel] = useState(selectableSizes.length === 1 ? selectableSizes[0].label : '')
+  const [sizeError, setSizeError] = useState('')
+
+  useEffect(() => {
+    setSelectedSizeLabel(selectableSizes.length === 1 ? selectableSizes[0].label : '')
+    setSizeError('')
+  }, [product._id, selectedSizeFilters.join('|')])
+
+  function handleAddToCombo() {
+    if (isComboFull) {
+      return
+    }
+
+    if (selectableSizes.length && !selectedSizeLabel) {
+      setSizeError('Selecciona una talla para agregar.')
+      return
+    }
+
+    onAddToCombo(product, selectedSizeLabel ? { kind: 'size', sizeLabel: selectedSizeLabel } : null)
+  }
+
+  return (
+    <article
+      className="product-card product-card--catalog product-card--combo"
+      style={{ '--enter-delay': `${index * 70}ms` }}
+    >
+      <div className="product-card__media">
+        <ProductCarousel
+          images={product.imageUrls || []}
+          name={product.name}
+          onImageClick={() => onOpenPreview(product)}
+          showOverlayActions={false}
+        />
+        {productHasFreeShipping(product) ? <FreeShippingBadge /> : null}
+      </div>
+      <div className="product-body">
+        <div className="product-meta">
+          <span>{product.category?.name || 'Selección Montiory'}</span>
+        </div>
+        <button type="button" className="product-card__title-button" onClick={() => onOpenPreview(product)}>
+          <h3>{product.name}</h3>
+        </button>
+        <StarRating rating={ratingData.rating} reviews={ratingData.reviews} centered />
+        {sizeOptions.length ? (
+          <div className="combo-card-sizes">
+            <span>Tallas disponibles</span>
+            <div className="combo-card-sizes__row">
+              {sizeOptions.map((sizeOption) => {
+                const isEmpty = sizeOption.stock <= 0
+                const isSelectable = selectableSizes.some((item) => item.label === sizeOption.label)
+                const isSelected = selectedSizeLabel === sizeOption.label
+
+                return (
+                  <button
+                    key={sizeOption.label}
+                    type="button"
+                    className={[
+                      'combo-card-sizes__item',
+                      isEmpty ? 'combo-card-sizes__item--empty' : '',
+                      isSelectable ? 'combo-card-sizes__item--available' : '',
+                      isSelected ? 'combo-card-sizes__item--selected' : '',
+                    ].filter(Boolean).join(' ')}
+                    disabled={!isSelectable}
+                    onClick={() => {
+                      setSelectedSizeLabel(sizeOption.label)
+                      setSizeError('')
+                    }}
+                  >
+                    <strong>{sizeOption.label}</strong>
+                    <small>{isEmpty ? 'Agotada' : isSelectable ? 'Disponible' : 'Otra talla'}</small>
+                  </button>
+                )
+              })}
+            </div>
+            {sizeError ? <p className="combo-card-sizes__error">{sizeError}</p> : null}
+          </div>
+        ) : (
+          <p className="combo-card-sizes__hint">Talla única. Puedes agregarla al combo.</p>
+        )}
+        <button
+          type="button"
+          className="button-primary combo-card-add"
+          disabled={isComboFull}
+          onClick={handleAddToCombo}
+        >
+          {isComboFull ? 'Combo completo' : 'Agregar al combo'}
+        </button>
+      </div>
+    </article>
+  )
+}
+
+function PromoComboBar({ promo, selections, onRemoveSelection, onAddToCart, onCancel }) {
+  const remaining = Math.max(0, promo.itemCount - selections.length)
+  const isComplete = remaining === 0
+
+  return (
+    <div className="promo-combo-bar">
+      <div className="promo-combo-bar__copy">
+        <span>Arma tu combo</span>
+        <strong>{formatPromotionLabel(promo, formatCurrency)}</strong>
+        <p>
+          {isComplete
+            ? 'Combo listo. Agrégalo al carrito o quita alguna prenda para cambiarla.'
+            : `Elige ${remaining} prenda${remaining === 1 ? '' : 's'} más. En cada publicación verás las tallas disponibles; selecciona la tuya y agrégala al combo.`}
+        </p>
+      </div>
+      <div className="promo-combo-bar__slots">
+        {selections.map((selection, index) => (
+          <button
+            key={`${selection.productId}-${selection.sizeLabel}-${index}`}
+            type="button"
+            className="promo-combo-bar__slot"
+            onClick={() => onRemoveSelection(index)}
+          >
+            <strong>{selection.name}</strong>
+            <small>{selection.sizeLabel || 'Quitar'}</small>
+          </button>
+        ))}
+        {Array.from({ length: remaining }).map((_, index) => (
+          <div key={`empty-${index}`} className="promo-combo-bar__slot promo-combo-bar__slot--empty">
+            Prenda {selections.length + index + 1}
+          </div>
+        ))}
+      </div>
+      <div className="promo-combo-bar__actions">
+        <button type="button" className="button-secondary" onClick={onCancel}>
+          Cancelar
+        </button>
+        <button type="button" className="button-primary" disabled={!isComplete} onClick={onAddToCart}>
+          Agregar combo al carrito
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -1291,8 +1830,14 @@ function CartIcon() {
 }
 
 function App() {
-  const [payload, setPayload] = useState({ categories: [], products: [], shippingZones: [], decantSettings: { sizes: [] } })
+  const [payload, setPayload] = useState({ categories: [], products: [], shippingZones: [], decantSettings: { sizes: [] }, promotions: [] })
   const [activeCategory, setActiveCategory] = useState('all')
+  const [selectedSizeFilters, setSelectedSizeFilters] = useState([])
+  const [isSizeFilterOpen, setIsSizeFilterOpen] = useState(false)
+  const [selectedPromoId, setSelectedPromoId] = useState('')
+  const [isPromoFilterOpen, setIsPromoFilterOpen] = useState(false)
+  const [draftPromoSelections, setDraftPromoSelections] = useState([])
+  const [confirmationMessage, setConfirmationMessage] = useState('')
   const [cartItems, setCartItems] = useState({})
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
@@ -1395,20 +1940,31 @@ function App() {
     }
   }, [activeCategory, hasDecantProducts])
 
+  const selectedPromo = useMemo(
+    () => (payload.promotions || []).find((promotion) => promotion._id === selectedPromoId) || null,
+    [payload.promotions, selectedPromoId],
+  )
+
   const filteredProducts = useMemo(() => {
-    if (activeCategory === 'decants') {
-      return payload.products.filter((product) => getVisibleDecantPrices(product, payload.decantSettings).length > 0)
-    }
+    const categoryProducts = activeCategory === 'decants'
+      ? payload.products.filter((product) => getVisibleDecantPrices(product, payload.decantSettings).length > 0)
+      : activeCategory === 'promos' || (selectedPromo && activeCategory === 'all')
+        ? payload.products.filter((product) => getVisibleDecantPrices(product, payload.decantSettings).length === 0)
+        : activeCategory === 'all'
+          ? payload.products
+          : payload.products.filter((product) => product.category?._id === activeCategory)
 
-    if (activeCategory === 'all') {
-      return payload.products
-    }
-
-    return payload.products.filter((product) => product.category?._id === activeCategory)
-  }, [activeCategory, payload.decantSettings, payload.products])
+    return categoryProducts.filter((product) => productHasAnySelectedSizeInStock(product, selectedSizeFilters))
+  }, [activeCategory, payload.decantSettings, payload.products, selectedPromo, selectedSizeFilters])
 
   const cartCount = useMemo(
-    () => Object.values(cartItems).reduce((total, item) => total + Number(item?.quantity || 0), 0),
+    () => Object.values(cartItems).reduce((total, item) => {
+      if (item?.kind === 'promo') {
+        return total + (Array.isArray(item.selections) ? item.selections.length : 0)
+      }
+
+      return total + Number(item?.quantity || 0)
+    }, 0),
     [cartItems],
   )
 
@@ -1421,6 +1977,33 @@ function App() {
     () =>
       Object.entries(cartItems)
         .map(([cartKey, entry]) => {
+          if (entry.kind === 'promo') {
+            const promotion = (payload.promotions || []).find((item) => item._id === entry.promoId)
+            const firstProduct = payload.products.find((item) => item._id === entry.selections?.[0]?.productId)
+
+            if (!promotion || !firstProduct || !entry.selections?.length) {
+              return null
+            }
+
+            return {
+              cartKey,
+              product: firstProduct,
+              quantity: 1,
+              displayName: `Combo ${promotion.itemCount} prendas`,
+              isDecantVariant: false,
+              isPromoCombo: true,
+              sizeLabel: entry.selections
+                .map((selection) => (selection.sizeLabel ? `${selection.name} · ${selection.sizeLabel}` : selection.name))
+                .join(' + '),
+              decantSizeId: '',
+              promoId: promotion._id,
+              promoItems: entry.selections,
+              unitPrice: Number(promotion.price),
+              baseLineTotal: Number(promotion.price),
+              lineTotal: Number(promotion.price),
+            }
+          }
+
           const product = payload.products.find((item) => item._id === entry.productId)
 
           if (!product || entry.quantity <= 0) {
@@ -1428,17 +2011,20 @@ function App() {
           }
 
           const isDecantVariant = entry.variant?.kind === 'decant'
-          const unitPrice = Number(isDecantVariant ? entry.variant.unitPrice : product.offerPrice || 0)
-          const baseUnitPrice = Number(isDecantVariant ? entry.variant.unitPrice : product.basePrice || product.offerPrice || 0)
+          const isSizeVariant = entry.variant?.kind === 'size' && Boolean(entry.variant.sizeLabel)
+          const displayPrices = getProductDisplayPrices(product)
+          const unitPrice = Number(isDecantVariant ? entry.variant.unitPrice : displayPrices.salePrice || 0)
+          const baseUnitPrice = Number(isDecantVariant ? entry.variant.unitPrice : displayPrices.compareAtPrice || displayPrices.salePrice || 0)
 
           return {
             cartKey,
             product,
             quantity: entry.quantity,
-            displayName: isDecantVariant
+            displayName: isDecantVariant || isSizeVariant
               ? buildDecantDisplayName(product.name, entry.variant.sizeLabel)
               : product.name,
             isDecantVariant,
+            isPromoCombo: false,
             sizeLabel: entry.variant?.sizeLabel || '',
             decantSizeId: entry.variant?.sizeId || '',
             unitPrice,
@@ -1447,7 +2033,7 @@ function App() {
           }
         })
         .filter(Boolean),
-    [cartItems, payload.products],
+    [cartItems, payload.products, payload.promotions],
   )
 
   const cartBaseSubtotal = useMemo(
@@ -1604,8 +2190,94 @@ function App() {
   }
 
   function handleAddToCartWithConfirmation(product, quantity = 1, variant = null) {
+    if (selectedPromo) {
+      handleAddToPromoCombo(product, variant)
+      return
+    }
+
     handleAddToCart(product._id, quantity, variant)
     setConfirmationProductName(variant?.sizeLabel ? buildDecantDisplayName(product.name, variant.sizeLabel) : product.name)
+    setConfirmationMessage('')
+    showConfirmation()
+  }
+
+  function handleSearchPromo(promotion, sizes) {
+    setSelectedPromoId(promotion._id)
+    setSelectedSizeFilters(sizes)
+    setDraftPromoSelections([])
+    setActiveCategory('promos')
+    setIsPromoFilterOpen(false)
+    setIsSizeFilterOpen(false)
+  }
+
+  function handleClearPromo() {
+    setSelectedPromoId('')
+    setDraftPromoSelections([])
+    setSelectedSizeFilters([])
+    setIsPromoFilterOpen(false)
+
+    if (activeCategory === 'promos') {
+      setActiveCategory('all')
+    }
+  }
+
+  function handleAddToPromoCombo(product, variant = null) {
+    if (!selectedPromo) {
+      return
+    }
+
+    const sizeOptions = getVisibleSizeOptions(product)
+
+    if (sizeOptions.length && !variant?.sizeLabel) {
+      handleOpenQuickView(product)
+      return
+    }
+
+    if (draftPromoSelections.length >= selectedPromo.itemCount) {
+      setConfirmationProductName(`Combo ${selectedPromo.itemCount} prendas`)
+      setConfirmationMessage('El combo ya está completo. Agrégalo al carrito o quita una prenda.')
+      showConfirmation()
+      return
+    }
+
+    const selectionName = variant?.sizeLabel ? `${product.name} · ${variant.sizeLabel}` : product.name
+
+    setDraftPromoSelections((current) => [
+      ...current,
+      {
+        productId: product._id,
+        name: product.name,
+        sizeLabel: variant?.sizeLabel || '',
+      },
+    ])
+    setConfirmationProductName(selectionName)
+    setConfirmationMessage(`${selectionName} se agregó a tu combo.`)
+    showConfirmation()
+    setQuickViewProduct(null)
+
+    if (routeProductId) {
+      handleBackToCatalog()
+    }
+  }
+
+  function handleAddPromoComboToCart() {
+    if (!selectedPromo || draftPromoSelections.length !== selectedPromo.itemCount) {
+      return
+    }
+
+    const comboKey = `promo:${selectedPromo._id}:${Date.now()}`
+
+    setCartItems((current) => ({
+      ...current,
+      [comboKey]: {
+        kind: 'promo',
+        promoId: selectedPromo._id,
+        selections: draftPromoSelections,
+      },
+    }))
+    setDraftPromoSelections([])
+    setConfirmationProductName(`Combo ${selectedPromo.itemCount} prendas`)
+    setConfirmationMessage(`Combo ${selectedPromo.itemCount} prendas ya está en tu carrito.`)
     showConfirmation()
   }
 
@@ -1659,8 +2331,13 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  function handleBuyNow(product) {
-    handleAddToCart(product._id, 1)
+  function handleBuyNow(product, variant = null) {
+    if (selectedPromo) {
+      handleAddToPromoCombo(product, variant)
+      return
+    }
+
+    handleAddToCart(product._id, 1, variant)
     window.history.pushState({}, '', '/checkout')
     setRouteProductId('')
     setIsCartRoute(false)
@@ -1782,7 +2459,7 @@ function App() {
     setCartItems((current) => {
       const existingItem = current[cartKey]
 
-      if (!existingItem) {
+      if (!existingItem || existingItem.kind === 'promo') {
         return current
       }
 
@@ -1802,6 +2479,11 @@ function App() {
 
       if (!existingItem) {
         return current
+      }
+
+      if (existingItem.kind === 'promo') {
+        const { [cartKey]: _removed, ...rest } = current
+        return rest
       }
 
       const nextQuantity = existingItem.quantity - 1
@@ -1867,6 +2549,8 @@ function App() {
           quantity: item.quantity,
           unitPrice: Number(item.unitPrice || 0),
           lineTotal: item.lineTotal,
+          promoId: item.promoId || undefined,
+          promoItems: item.promoItems || undefined,
         })),
         shippingZone: {
           id: selectedShippingZone._id,
@@ -2023,7 +2707,7 @@ function App() {
           <ProductDetailView
             product={routeProduct}
             onBack={handleBackToCatalog}
-            onAddToCart={() => handleAddToCartWithConfirmation(routeProduct, 1)}
+            onAddToCart={(quantity, variant) => handleAddToCartWithConfirmation(routeProduct, quantity, variant)}
             onBuyNow={handleBuyNow}
           />
         ) : (
@@ -2033,11 +2717,14 @@ function App() {
                 <span>Colecciones</span>
               </div>
 
-              <div className="filter-row filter-row--hero">
+              <div className={isSizeFilterOpen || isPromoFilterOpen ? 'filter-row filter-row--hero is-size-filter-open' : 'filter-row filter-row--hero'}>
                 <button
                   type="button"
-                  className={activeCategory === 'all' ? 'chip chip--active' : 'chip'}
-                  onClick={() => setActiveCategory('all')}
+                  className={activeCategory === 'all' && !selectedPromo ? 'chip chip--active' : 'chip'}
+                  onClick={() => {
+                    setActiveCategory('all')
+                    setIsPromoFilterOpen(false)
+                  }}
                   style={{ '--enter-delay': '0ms' }}
                 >
                   Todas
@@ -2047,7 +2734,10 @@ function App() {
                     type="button"
                     key={chip.id}
                     className={activeCategory === chip.id ? 'chip chip--active' : 'chip'}
-                    onClick={() => setActiveCategory(chip.id)}
+                    onClick={() => {
+                      setActiveCategory(chip.id)
+                      setIsPromoFilterOpen(false)
+                    }}
                     style={{ '--enter-delay': `${(index + 1) * 90}ms` }}
                   >
                     <span className="chip__content">
@@ -2056,8 +2746,57 @@ function App() {
                     </span>
                   </button>
                 ))}
+                <div style={{ '--enter-delay': `${(categoryChips.length + 1) * 90}ms` }}>
+                  <PromoFilterChip
+                    promotions={payload.promotions || []}
+                    selectedPromoId={selectedPromoId}
+                    selectedSizes={selectedSizeFilters}
+                    isOpen={isPromoFilterOpen}
+                    onOpenChange={(isOpen) => {
+                      setIsPromoFilterOpen(isOpen)
+                      if (isOpen) {
+                        setActiveCategory('promos')
+                        setIsSizeFilterOpen(false)
+                      }
+                    }}
+                    onSearch={handleSearchPromo}
+                    onClear={handleClearPromo}
+                  />
+                </div>
+                <div style={{ '--enter-delay': `${(categoryChips.length + 2) * 90}ms` }}>
+                  <SizeFilterChip
+                    selectedSizes={selectedSizeFilters}
+                    isOpen={isSizeFilterOpen}
+                    onOpenChange={(isOpen) => {
+                      setIsSizeFilterOpen(isOpen)
+                      if (isOpen) {
+                        setIsPromoFilterOpen(false)
+                      }
+                    }}
+                    onToggleSize={(label) => {
+                      setSelectedSizeFilters((current) => (
+                        current.includes(label)
+                          ? current.filter((sizeLabel) => sizeLabel !== label)
+                          : [...current, label]
+                      ))
+                    }}
+                    onClear={() => setSelectedSizeFilters([])}
+                  />
+                </div>
               </div>
             </div>
+
+            {selectedPromo ? (
+              <PromoComboBar
+                promo={selectedPromo}
+                selections={draftPromoSelections}
+                onRemoveSelection={(index) => {
+                  setDraftPromoSelections((current) => current.filter((_selection, currentIndex) => currentIndex !== index))
+                }}
+                onAddToCart={handleAddPromoComboToCart}
+                onCancel={handleClearPromo}
+              />
+            ) : null}
 
             <section className="catalog-showcase" id="catalogo">
               {isLoading ? <p className="status-copy status-copy--centered">Cargando catálogo...</p> : null}
@@ -2066,7 +2805,23 @@ function App() {
               {!isLoading && !errorMessage ? (
                 <div className="product-grid product-grid--showcase">
                   {filteredProducts.map((product, index) => {
+                    if (selectedPromo) {
+                      return (
+                        <ComboProductCard
+                          key={product._id}
+                          product={product}
+                          index={index}
+                          selectedSizeFilters={selectedSizeFilters}
+                          isComboFull={draftPromoSelections.length >= selectedPromo.itemCount}
+                          onOpenPreview={handleOpenQuickView}
+                          onAddToCombo={handleAddToPromoCombo}
+                        />
+                      )
+                    }
+
                     const ratingData = getProductRatingData(product)
+                    const sizeOptions = getVisibleSizeOptions(product)
+                    const displayPrices = getProductDisplayPrices(product)
                     const visibleDecantPrices = getVisibleDecantPrices(product, payload.decantSettings)
                     const isDecantView = activeCategory === 'decants'
                     const selectedDecantSizeId = selectedDecantSizes[product._id]
@@ -2087,7 +2842,14 @@ function App() {
                             images={product.imageUrls || []}
                             name={product.name}
                             onImageClick={() => handleOpenProduct(product)}
-                            onAddToCart={() => handleAddToCartWithConfirmation(product, 1)}
+                            onAddToCart={() => {
+                              if (sizeOptions.length) {
+                                handleOpenQuickView(product)
+                                return
+                              }
+
+                              handleAddToCartWithConfirmation(product, 1)
+                            }}
                             onQuickView={() => handleOpenQuickView(product)}
                             showOverlayActions={!isDecantView}
                           />
@@ -2099,6 +2861,15 @@ function App() {
                           </div>
                           <h3>{product.name}</h3>
                           <StarRating rating={ratingData.rating} reviews={ratingData.reviews} centered />
+                          {!isDecantView && sizeOptions.length ? (
+                            <div className="product-size-strip" aria-label={`Tallas disponibles de ${product.name}`}>
+                              {sizeOptions.map((sizeOption) => (
+                                <span key={sizeOption.label} className={sizeOption.stock > 0 ? '' : 'product-size-strip__item--empty'}>
+                                  {sizeOption.label}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
                           {isDecantView ? (
                             <>
                               {selectedDecantPrice ? (
@@ -2155,8 +2926,10 @@ function App() {
                             </>
                           ) : (
                             <div className="price-stack price-stack--catalog">
-                              <span>{formatCurrency(product.basePrice)}</span>
-                              <strong>{formatCurrency(product.offerPrice)}</strong>
+                              {displayPrices.compareAtPrice != null ? (
+                                <span>{formatCurrency(displayPrices.compareAtPrice)}</span>
+                              ) : null}
+                              <strong>{formatCurrency(displayPrices.salePrice)}</strong>
                             </div>
                           )}
                         </div>
@@ -2167,7 +2940,11 @@ function App() {
               ) : null}
 
               {!isLoading && !errorMessage && filteredProducts.length === 0 ? (
-                <p className="status-copy status-copy--centered">No hay publicaciones activas en esta colección.</p>
+                <p className="status-copy status-copy--centered">
+                  {selectedSizeFilters.length
+                    ? `No hay productos en stock para las tallas ${selectedSizeFilters.join(', ')}.`
+                    : 'No hay publicaciones activas en esta colección.'}
+                </p>
               ) : null}
             </section>
           </>
@@ -2177,22 +2954,24 @@ function App() {
           <QuickViewModal
             product={quickViewProduct}
             onClose={handleCloseQuickView}
-            onAddToCart={() => handleAddToCartWithConfirmation(quickViewProduct, 1)}
+            onAddToCart={(quantity, variant) => handleAddToCartWithConfirmation(quickViewProduct, quantity, variant)}
             onBuyNow={handleBuyNow}
             onOpenFullProduct={handleOpenProduct}
             isConfirmationVisible={isConfirmationVisible}
             onCloseConfirmation={startClosingConfirmation}
+            comboMode={Boolean(selectedPromo)}
+            selectedSizeFilters={selectedSizeFilters}
           />
         ) : null}
 
-        {isConfirmationVisible ? <CartConfirmationModal productName={confirmationProductName} confirmationState={confirmationState} /> : null}
+        {isConfirmationVisible ? <CartConfirmationModal productName={confirmationProductName} confirmationState={confirmationState} message={confirmationMessage} /> : null}
 
       </section>
 
       <div className="social-float">
         <a
           className="social-float__link social-float__link--instagram"
-          href="https://www.instagram.com/montiory"
+          href={instagramUrl}
           target="_blank"
           rel="noreferrer"
           aria-label="Abrir Instagram de Montiory"
