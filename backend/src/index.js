@@ -16,6 +16,7 @@ import decantRouter from './routes/decant.routes.js'
 import marketingRouter from './routes/marketing.routes.js'
 import partnerRouter from './routes/partner.routes.js'
 import promotionRouter from './routes/promotion.routes.js'
+import storefrontSettingsRouter from './routes/storefront-settings.routes.js'
 import uploadRouter from './routes/upload.routes.js'
 import { seedAdminUsers } from './services/seed-admin.js'
 
@@ -65,6 +66,7 @@ app.use('/api/decants', decantRouter)
 app.use('/api/marketing', marketingRouter)
 app.use('/api/partners', partnerRouter)
 app.use('/api/promotions', promotionRouter)
+app.use('/api/storefront-settings', storefrontSettingsRouter)
 app.use('/api/uploads', uploadRouter)
 app.use('/api/storefront', publicRouter)
 

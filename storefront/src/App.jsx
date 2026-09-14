@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import './App.css'
 
@@ -366,6 +366,132 @@ function useCartConfirmation() {
 
 function formatPromotionLabel(promotion, formatCurrencyValue) {
   return `${promotion.itemCount} prendas · ${formatCurrencyValue(promotion.price)}`
+}
+
+function useFixedMenuStyle(isOpen, triggerRef, layoutKey = '') {
+  const [style, setStyle] = useState(null)
+
+  useLayoutEffect(() => {
+    if (!isOpen || !triggerRef.current || typeof window === 'undefined') {
+      setStyle(null)
+      return undefined
+    }
+
+    function updatePosition() {
+      const rect = triggerRef.current.getBoundingClientRect()
+      const gutter = 12
+      const width = Math.min(320, Math.max(240, window.innerWidth - gutter * 2))
+      const spaceBelow = window.innerHeight - rect.bottom - gutter - 10
+      const spaceAbove = rect.top - gutter - 10
+      const placeBelow = spaceBelow >= 220 || spaceBelow >= spaceAbove
+      const available = Math.max(placeBelow ? spaceBelow : spaceAbove, 160)
+      const maxHeight = Math.min(420, available)
+      let left = rect.left
+      if (left + width > window.innerWidth - gutter) {
+        left = window.innerWidth - width - gutter
+      }
+      left = Math.max(gutter, left)
+
+      const top = placeBelow
+        ? rect.bottom + 10
+        : Math.max(gutter, rect.top - maxHeight - 10)
+
+      setStyle({
+        position: 'fixed',
+        top: `${top}px`,
+        left: `${left}px`,
+        width: `${width}px`,
+        maxHeight: `${maxHeight}px`,
+        overflowY: 'auto',
+        zIndex: 80,
+      })
+    }
+
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [isOpen, layoutKey, triggerRef])
+
+  return style
+}
+
+function FilterMenuPortal({ isOpen, triggerRef, menuRef, layoutKey = '', className = '', children, ...props }) {
+  const menuStyle = useFixedMenuStyle(isOpen, triggerRef, layoutKey)
+
+  if (!isOpen || !menuStyle || typeof document === 'undefined') {
+    return null
+  }
+
+  return createPortal(
+    <div ref={menuRef} {...props} className={`${className} size-filter__menu--portal`.trim()} style={menuStyle}>
+      {children}
+    </div>,
+    document.body,
+  )
+}
+
+function getOrderedStorefrontChips({ categories, chipOrder, hasDecantProducts, decantSettings }) {
+  const categoryChips = (categories || []).map((category, index) => ({
+    id: String(category._id),
+    type: 'category',
+    label: category.name,
+    hasFreeShipping: Boolean(category.hasFreeShipping),
+    sortOrder: Number.isFinite(Number(category.sortOrder)) ? Number(category.sortOrder) : index,
+  }))
+  const categoryMap = new Map(categoryChips.map((chip) => [chip.id, chip]))
+  const specialChips = {
+    all: { id: 'all', type: 'all', label: 'Todas' },
+    promos: { id: 'promos', type: 'promos', label: 'Promociones' },
+    decants: hasDecantProducts
+      ? {
+          id: 'decants',
+          type: 'decants',
+          label: 'Decants',
+          sortOrder: Number.isFinite(Number(decantSettings?.sortOrder))
+            ? Number(decantSettings.sortOrder)
+            : categoryChips.length,
+        }
+      : null,
+  }
+
+  const allowedIds = ['all', 'promos', ...categoryChips.map((chip) => chip.id), ...(specialChips.decants ? ['decants'] : [])]
+  const allowedSet = new Set(allowedIds)
+  const incoming = (Array.isArray(chipOrder) ? chipOrder : []).map(String).filter((id) => allowedSet.has(id))
+  const seen = new Set()
+  const orderedIds = incoming.filter((id) => {
+    if (seen.has(id)) {
+      return false
+    }
+    seen.add(id)
+    return true
+  })
+
+  const fallbackIds = ['all', ...[...categoryChips].sort((leftChip, rightChip) => {
+    if (leftChip.sortOrder !== rightChip.sortOrder) {
+      return leftChip.sortOrder - rightChip.sortOrder
+    }
+    return leftChip.id.localeCompare(rightChip.id)
+  }).map((chip) => chip.id), ...(specialChips.decants ? ['decants'] : []), 'promos']
+
+  for (const id of fallbackIds) {
+    if (!seen.has(id)) {
+      orderedIds.push(id)
+      seen.add(id)
+    }
+  }
+
+  return orderedIds.map((id) => {
+    if (specialChips[id]) {
+      return specialChips[id]
+    }
+
+    return categoryMap.get(id) || null
+  }).filter(Boolean)
 }
 
 function CartConfirmationModal({ productName, confirmationState, message }) {
@@ -1480,6 +1606,7 @@ function QuickViewModal({
 
 function SizeFilterChip({ selectedSizes, onToggleSize, onClear, isOpen, onOpenChange }) {
   const rootRef = useRef(null)
+  const menuRef = useRef(null)
   const hasSelection = selectedSizes.length > 0
 
   useEffect(() => {
@@ -1488,9 +1615,11 @@ function SizeFilterChip({ selectedSizes, onToggleSize, onClear, isOpen, onOpenCh
     }
 
     function handlePointerDown(event) {
-      if (!rootRef.current?.contains(event.target)) {
-        onOpenChange(false)
+      if (rootRef.current?.contains(event.target) || menuRef.current?.contains(event.target)) {
+        return
       }
+
+      onOpenChange(false)
     }
 
     function handleKeyDown(event) {
@@ -1522,37 +1651,44 @@ function SizeFilterChip({ selectedSizes, onToggleSize, onClear, isOpen, onOpenCh
           {hasSelection ? <small className="size-filter__count">{selectedSizes.join(' · ')}</small> : null}
         </span>
       </button>
-      {isOpen ? (
-        <div className="size-filter__menu" role="listbox" aria-label="Tallas disponibles" aria-multiselectable="true">
-          {FILTERABLE_SIZE_LABELS.map((label) => {
-            const isSelected = selectedSizes.includes(label)
+      <FilterMenuPortal
+        isOpen={isOpen}
+        triggerRef={rootRef}
+        menuRef={menuRef}
+        className="size-filter__menu"
+        role="listbox"
+        aria-label="Tallas disponibles"
+        aria-multiselectable="true"
+      >
+        {FILTERABLE_SIZE_LABELS.map((label) => {
+          const isSelected = selectedSizes.includes(label)
 
-            return (
-              <button
-                key={label}
-                type="button"
-                role="option"
-                aria-selected={isSelected}
-                className={isSelected ? 'size-filter__option size-filter__option--active' : 'size-filter__option'}
-                onClick={() => onToggleSize(label)}
-              >
-                {label}
-              </button>
-            )
-          })}
-          {hasSelection ? (
-            <button type="button" className="size-filter__clear" onClick={onClear}>
-              Limpiar
+          return (
+            <button
+              key={label}
+              type="button"
+              role="option"
+              aria-selected={isSelected}
+              className={isSelected ? 'size-filter__option size-filter__option--active' : 'size-filter__option'}
+              onClick={() => onToggleSize(label)}
+            >
+              {label}
             </button>
-          ) : null}
-        </div>
-      ) : null}
+          )
+        })}
+        {hasSelection ? (
+          <button type="button" className="size-filter__clear" onClick={onClear}>
+            Limpiar
+          </button>
+        ) : null}
+      </FilterMenuPortal>
     </div>
   )
 }
 
 function PromoFilterChip({ promotions, selectedPromoId, selectedSizes, isOpen, onOpenChange, onSearch, onClear }) {
   const rootRef = useRef(null)
+  const menuRef = useRef(null)
   const [draftPromoId, setDraftPromoId] = useState(selectedPromoId)
   const [draftSizes, setDraftSizes] = useState(selectedSizes)
   const selectedPromo = promotions.find((promotion) => promotion._id === selectedPromoId) || null
@@ -1567,9 +1703,11 @@ function PromoFilterChip({ promotions, selectedPromoId, selectedSizes, isOpen, o
     setDraftSizes(selectedSizes)
 
     function handlePointerDown(event) {
-      if (!rootRef.current?.contains(event.target)) {
-        onOpenChange(false)
+      if (rootRef.current?.contains(event.target) || menuRef.current?.contains(event.target)) {
+        return
       }
+
+      onOpenChange(false)
     }
 
     function handleKeyDown(event) {
@@ -1609,65 +1747,71 @@ function PromoFilterChip({ promotions, selectedPromoId, selectedSizes, isOpen, o
           ) : null}
         </span>
       </button>
-      {isOpen ? (
-        <div className="size-filter__menu promo-filter__menu" role="listbox" aria-label="Promociones disponibles">
-          {promotions.map((promotion) => {
-            const isSelected = draftPromoId === promotion._id
+      <FilterMenuPortal
+        isOpen={isOpen}
+        triggerRef={rootRef}
+        menuRef={menuRef}
+        layoutKey={draftPromoId || ''}
+        className="size-filter__menu promo-filter__menu"
+        role="listbox"
+        aria-label="Promociones disponibles"
+      >
+        {promotions.map((promotion) => {
+          const isSelected = draftPromoId === promotion._id
 
-            return (
-              <button
-                key={promotion._id}
-                type="button"
-                role="option"
-                aria-selected={isSelected}
-                className={isSelected ? 'size-filter__option size-filter__option--active' : 'size-filter__option'}
-                onClick={() => setDraftPromoId(promotion._id)}
-              >
-                {formatPromotionLabel(promotion, formatCurrency)}
-              </button>
-            )
-          })}
-          {draftPromo ? (
-            <div className="promo-filter__sizes">
-              <span>Elige las tallas</span>
-              <div className="promo-filter__size-row">
-                {FILTERABLE_SIZE_LABELS.map((label) => {
-                  const isSelected = draftSizes.includes(label)
-
-                  return (
-                    <button
-                      key={label}
-                      type="button"
-                      className={isSelected ? 'size-filter__option size-filter__option--active' : 'size-filter__option'}
-                      onClick={() => {
-                        setDraftSizes((current) => (
-                          current.includes(label)
-                            ? current.filter((sizeLabel) => sizeLabel !== label)
-                            : [...current, label]
-                        ))
-                      }}
-                    >
-                      {label}
-                    </button>
-                  )
-                })}
-              </div>
-              <button
-                type="button"
-                className="promo-filter__search"
-                onClick={() => onSearch(draftPromo, draftSizes)}
-              >
-                Buscar combo
-              </button>
-            </div>
-          ) : null}
-          {selectedPromo ? (
-            <button type="button" className="size-filter__clear" onClick={onClear}>
-              Limpiar
+          return (
+            <button
+              key={promotion._id}
+              type="button"
+              role="option"
+              aria-selected={isSelected}
+              className={isSelected ? 'size-filter__option size-filter__option--active' : 'size-filter__option'}
+              onClick={() => setDraftPromoId(promotion._id)}
+            >
+              {formatPromotionLabel(promotion, formatCurrency)}
             </button>
-          ) : null}
-        </div>
-      ) : null}
+          )
+        })}
+        {draftPromo ? (
+          <div className="promo-filter__sizes">
+            <span>Elige las tallas</span>
+            <div className="promo-filter__size-row">
+              {FILTERABLE_SIZE_LABELS.map((label) => {
+                const isSelected = draftSizes.includes(label)
+
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    className={isSelected ? 'size-filter__option size-filter__option--active' : 'size-filter__option'}
+                    onClick={() => {
+                      setDraftSizes((current) => (
+                        current.includes(label)
+                          ? current.filter((sizeLabel) => sizeLabel !== label)
+                          : [...current, label]
+                      ))
+                    }}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+            <button
+              type="button"
+              className="promo-filter__search"
+              onClick={() => onSearch(draftPromo, draftSizes)}
+            >
+              Buscar combo
+            </button>
+          </div>
+        ) : null}
+        {selectedPromo ? (
+          <button type="button" className="size-filter__clear" onClick={onClear}>
+            Limpiar
+          </button>
+        ) : null}
+      </FilterMenuPortal>
     </div>
   )
 }
@@ -1830,7 +1974,7 @@ function CartIcon() {
 }
 
 function App() {
-  const [payload, setPayload] = useState({ categories: [], products: [], shippingZones: [], decantSettings: { sizes: [] }, promotions: [] })
+  const [payload, setPayload] = useState({ categories: [], products: [], shippingZones: [], decantSettings: { sizes: [] }, promotions: [], chipOrder: [] })
   const [activeCategory, setActiveCategory] = useState('all')
   const [selectedSizeFilters, setSelectedSizeFilters] = useState([])
   const [isSizeFilterOpen, setIsSizeFilterOpen] = useState(false)
@@ -1907,32 +2051,15 @@ function App() {
     [payload.decantSettings, payload.products],
   )
 
-  const categoryChips = useMemo(() => {
-    const chips = payload.categories.map((category, index) => ({
-      id: category._id,
-      label: category.name,
-      hasFreeShipping: Boolean(category.hasFreeShipping),
-      sortOrder: Number.isFinite(Number(category.sortOrder)) ? Number(category.sortOrder) : index,
-    }))
-
-    if (hasDecantProducts) {
-      chips.push({
-        id: 'decants',
-        label: 'Decants',
-        sortOrder: Number.isFinite(Number(payload.decantSettings?.sortOrder))
-          ? Number(payload.decantSettings.sortOrder)
-          : chips.length,
-      })
-    }
-
-    return chips.sort((leftChip, rightChip) => {
-      if (leftChip.sortOrder !== rightChip.sortOrder) {
-        return leftChip.sortOrder - rightChip.sortOrder
-      }
-
-      return leftChip.id === 'decants' ? 1 : -1
-    })
-  }, [hasDecantProducts, payload.categories, payload.decantSettings])
+  const orderedStorefrontChips = useMemo(
+    () => getOrderedStorefrontChips({
+      categories: payload.categories,
+      chipOrder: payload.chipOrder,
+      hasDecantProducts,
+      decantSettings: payload.decantSettings,
+    }),
+    [hasDecantProducts, payload.categories, payload.chipOrder, payload.decantSettings],
+  )
 
   useEffect(() => {
     if (activeCategory === 'decants' && !hasDecantProducts) {
@@ -2718,52 +2845,57 @@ function App() {
               </div>
 
               <div className={isSizeFilterOpen || isPromoFilterOpen ? 'filter-row filter-row--hero is-size-filter-open' : 'filter-row filter-row--hero'}>
-                <button
-                  type="button"
-                  className={activeCategory === 'all' && !selectedPromo ? 'chip chip--active' : 'chip'}
-                  onClick={() => {
-                    setActiveCategory('all')
-                    setIsPromoFilterOpen(false)
-                  }}
-                  style={{ '--enter-delay': '0ms' }}
-                >
-                  Todas
-                </button>
-                {categoryChips.map((chip, index) => (
-                  <button
-                    type="button"
-                    key={chip.id}
-                    className={activeCategory === chip.id ? 'chip chip--active' : 'chip'}
-                    onClick={() => {
-                      setActiveCategory(chip.id)
-                      setIsPromoFilterOpen(false)
-                    }}
-                    style={{ '--enter-delay': `${(index + 1) * 90}ms` }}
-                  >
-                    <span className="chip__content">
-                      <span>{chip.label}</span>
-                      {chip.hasFreeShipping ? <FreeShippingBadge compact /> : null}
-                    </span>
-                  </button>
-                ))}
-                <div style={{ '--enter-delay': `${(categoryChips.length + 1) * 90}ms` }}>
-                  <PromoFilterChip
-                    promotions={payload.promotions || []}
-                    selectedPromoId={selectedPromoId}
-                    selectedSizes={selectedSizeFilters}
-                    isOpen={isPromoFilterOpen}
-                    onOpenChange={(isOpen) => {
-                      setIsPromoFilterOpen(isOpen)
-                      if (isOpen) {
-                        setActiveCategory('promos')
-                        setIsSizeFilterOpen(false)
-                      }
-                    }}
-                    onSearch={handleSearchPromo}
-                    onClear={handleClearPromo}
-                  />
-                </div>
-                <div style={{ '--enter-delay': `${(categoryChips.length + 2) * 90}ms` }}>
+                {orderedStorefrontChips.map((chip, index) => {
+                  if (chip.id === 'promos') {
+                    if (!(payload.promotions || []).length) {
+                      return null
+                    }
+
+                    return (
+                      <div key="promos" style={{ '--enter-delay': `${index * 90}ms` }}>
+                        <PromoFilterChip
+                          promotions={payload.promotions || []}
+                          selectedPromoId={selectedPromoId}
+                          selectedSizes={selectedSizeFilters}
+                          isOpen={isPromoFilterOpen}
+                          onOpenChange={(isOpen) => {
+                            setIsPromoFilterOpen(isOpen)
+                            if (isOpen) {
+                              setActiveCategory('promos')
+                              setIsSizeFilterOpen(false)
+                            }
+                          }}
+                          onSearch={handleSearchPromo}
+                          onClear={handleClearPromo}
+                        />
+                      </div>
+                    )
+                  }
+
+                  const isAllChip = chip.id === 'all'
+                  const isActive = isAllChip
+                    ? activeCategory === 'all' && !selectedPromo
+                    : activeCategory === chip.id
+
+                  return (
+                    <button
+                      type="button"
+                      key={chip.id}
+                      className={isActive ? 'chip chip--active' : 'chip'}
+                      onClick={() => {
+                        setActiveCategory(isAllChip ? 'all' : chip.id)
+                        setIsPromoFilterOpen(false)
+                      }}
+                      style={{ '--enter-delay': `${index * 90}ms` }}
+                    >
+                      <span className="chip__content">
+                        <span>{chip.label}</span>
+                        {chip.hasFreeShipping ? <FreeShippingBadge compact /> : null}
+                      </span>
+                    </button>
+                  )
+                })}
+                <div style={{ '--enter-delay': `${(orderedStorefrontChips.length + 1) * 90}ms` }}>
                   <SizeFilterChip
                     selectedSizes={selectedSizeFilters}
                     isOpen={isSizeFilterOpen}

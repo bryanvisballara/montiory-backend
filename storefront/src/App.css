@@ -1816,6 +1816,11 @@
   border-radius: 14px;
 }
 
+.size-filter__menu--portal {
+  position: fixed;
+  z-index: 80;
+}
+
 .promo-filter__menu {
   min-width: 280px;
 }
@@ -2986,6 +2991,10 @@
     padding-bottom: 4px;
     scrollbar-width: none;
     -ms-overflow-style: none;
+  }
+
+  .filter-row--hero.is-size-filter-open {
+    overflow: visible;
   }
 
   .filter-row--hero::-webkit-scrollbar {

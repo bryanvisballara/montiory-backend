@@ -16,6 +16,8 @@ import PreOrder from '../models/PreOrder.js'
 import Product from '../models/Product.js'
 import Promotion from '../models/Promotion.js'
 import ShippingZone from '../models/ShippingZone.js'
+import StorefrontSettings from '../models/StorefrontSettings.js'
+import { normalizeChipOrder } from '../lib/chip-order.js'
 
 const router = Router()
 
@@ -684,12 +686,13 @@ router.post(
 router.get(
   '/',
   asyncHandler(async (_request, response) => {
-    const [categories, products, shippingZones, decantSettings, promotions] = await Promise.all([
+    const [categories, products, shippingZones, decantSettings, promotions, storefrontSettings] = await Promise.all([
       Category.find({ isActive: true }).sort({ sortOrder: 1, createdAt: 1 }).lean(),
       Product.find({ isPublished: true }).populate('category', 'name hasFreeShipping').sort({ createdAt: -1 }).lean(),
       ShippingZone.find({ isActive: true }).sort({ place: 1 }).lean(),
       DecantSettings.findOne({ key: 'default' }).lean(),
       Promotion.find({ isActive: true }).sort({ itemCount: 1, createdAt: 1 }).lean(),
+      StorefrontSettings.findOne({ key: 'default' }).lean(),
     ])
 
     response.json({
@@ -698,6 +701,11 @@ router.get(
       shippingZones,
       decantSettings: decantSettings || { key: 'default', sortOrder: categories.length, sizes: [] },
       promotions,
+      chipOrder: normalizeChipOrder(
+        storefrontSettings?.chipOrder,
+        categories.map((category) => String(category._id)),
+        Boolean(decantSettings?.isEnabled),
+      ),
     })
   }),
 )

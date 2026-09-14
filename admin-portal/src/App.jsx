@@ -37,6 +37,7 @@ const emptyProductForm = {
   imageUrls: [],
   description: '',
   hasFreeShipping: false,
+  isPublished: true,
 }
 const emptyShippingForm = { place: '', price: '', eta: '' }
 const emptyCouponForm = {
@@ -556,6 +557,7 @@ function App() {
   const [preOrders, setPreOrders] = useState([])
   const [coupons, setCoupons] = useState([])
   const [promotions, setPromotions] = useState([])
+  const [chipOrder, setChipOrder] = useState([])
   const [promotionForm, setPromotionForm] = useState(emptyPromotionForm)
   const [categoryForm, setCategoryForm] = useState(emptyCategoryForm)
   const [productForm, setProductForm] = useState(emptyProductForm)
@@ -759,25 +761,41 @@ function App() {
       sortOrder: normalizeOrderValue(category.sortOrder, index),
     }))
     const shouldShowDecants = Boolean(decantSettings.isEnabled)
-    const decantsSortOrder = normalizeOrderValue(decantSettings.sortOrder, categoryItems.length)
-
-    return [
+    const virtualItems = [
+      {
+        _id: 'all',
+        name: 'Todas',
+        description: 'Chip del storefront que muestra todo el catálogo.',
+        type: 'all',
+      },
+      {
+        _id: 'promos',
+        name: 'Promociones',
+        description: 'Chip del storefront para armar combos y promociones.',
+        type: 'promos',
+      },
       ...categoryItems,
       ...(shouldShowDecants ? [{
         _id: 'decants',
         name: 'Decants',
         description: 'Chip especial del storefront para perfumes con tamaños de decants configurados.',
         type: 'decants',
-        sortOrder: decantsSortOrder,
       }] : []),
-    ].sort((leftItem, rightItem) => {
-      if (leftItem.sortOrder !== rightItem.sortOrder) {
-        return leftItem.sortOrder - rightItem.sortOrder
-      }
+    ]
+    const itemMap = new Map(virtualItems.map((item) => [String(item._id), item]))
+    const fallbackIds = ['all', ...categoryItems.map((item) => String(item._id)), ...(shouldShowDecants ? ['decants'] : []), 'promos']
+    const incoming = (chipOrder.length ? chipOrder : fallbackIds).map(String)
+    const seen = new Set()
+    const orderedIds = incoming.filter((id) => itemMap.has(id) && !seen.has(id) && seen.add(id))
 
-      return leftItem.type === 'decants' ? 1 : -1
-    })
-  }, [categories, decantSettings.isEnabled, decantSettings.sortOrder])
+    for (const id of fallbackIds) {
+      if (!seen.has(id)) {
+        orderedIds.push(id)
+      }
+    }
+
+    return orderedIds.map((id) => itemMap.get(id)).filter(Boolean)
+  }, [categories, chipOrder, decantSettings.isEnabled])
 
   const selectedMarketingCustomers = useMemo(
     () => customers.filter((customer) => selectedMarketingCustomerIds.includes(customer._id)),
@@ -934,6 +952,7 @@ function App() {
         imageUrls: item.imageUrls || [],
         description: item.description || '',
         hasFreeShipping: Boolean(item.hasFreeShipping),
+        isPublished: item.isPublished !== false,
       })
       setProductFiles([])
     }
@@ -1206,6 +1225,7 @@ function App() {
         setPreOrders([])
         setCoupons([])
         setPromotions([])
+        setChipOrder([])
         setPartners([])
         setSelectedPartnerId(partnerSnapshot.partner.id)
         setSelectedPartnerSnapshot(partnerSnapshot)
@@ -1213,7 +1233,7 @@ function App() {
         return
       }
 
-      const [categoryRows, decantRows, productRows, shippingRows, customerRows, orderRows, preOrderRows, couponRows, promotionRows, partnerRows] = await Promise.all([
+      const [categoryRows, decantRows, productRows, shippingRows, customerRows, orderRows, preOrderRows, couponRows, promotionRows, partnerRows, storefrontSettings] = await Promise.all([
         isOperator ? Promise.resolve([]) : apiRequest('/categories', { headers }),
         isOperator ? Promise.resolve(emptyDecantSettings) : apiRequest('/decants', { headers }),
         isOperator ? Promise.resolve([]) : apiRequest('/products', { headers }),
@@ -1232,6 +1252,15 @@ function App() {
               throw error
             }),
         isOperator ? Promise.resolve([]) : apiRequest('/partners', { headers }),
+        isOperator
+          ? Promise.resolve({ chipOrder: [] })
+          : apiRequest('/storefront-settings', { headers }).catch((error) => {
+              if (error.message === 'Route not found') {
+                return { chipOrder: [] }
+              }
+
+              throw error
+            }),
       ])
 
       setCategories(categoryRows)
@@ -1243,6 +1272,7 @@ function App() {
       setPreOrders(preOrderRows)
       setCoupons(couponRows)
       setPromotions(promotionRows)
+      setChipOrder(storefrontSettings?.chipOrder || [])
       setPartners(partnerRows)
       setSelectedPartnerId((current) => {
         if (current && partnerRows.some((partner) => partner.id === current)) {
@@ -1403,6 +1433,7 @@ function App() {
 
     const previousCategories = categories
     const previousDecantSettings = decantSettings
+    const previousChipOrder = chipOrder
     const nextOrderItems = reorderCategoryList(orderedCategoryItems, droppedCategoryId, targetCategoryId)
 
     resetCategoryDragState()
@@ -1411,6 +1442,7 @@ function App() {
       return
     }
 
+    const nextChipOrder = nextOrderItems.map((item) => String(item._id))
     const nextCategories = nextOrderItems
       .map((item, index) => ({ ...item, sortOrder: index }))
       .filter((item) => item.type === 'category')
@@ -1418,14 +1450,15 @@ function App() {
     const nextDecantSortOrder = nextOrderItems.findIndex((item) => item._id === 'decants')
 
     setCategories(nextCategories)
+    setChipOrder(nextChipOrder)
     setDecantSettings((current) => ({
       ...current,
-      sortOrder: nextDecantSortOrder,
+      sortOrder: nextDecantSortOrder < 0 ? current.sortOrder : nextDecantSortOrder,
     }))
     setIsSavingCategoryOrder(true)
 
     try {
-      const [reorderedCategories, savedDecantSettings] = await Promise.all([
+      const [reorderedCategories, savedDecantSettings, savedStorefrontSettings] = await Promise.all([
         apiRequest('/categories/reorder', {
           method: 'PUT',
           body: JSON.stringify({
@@ -1438,7 +1471,7 @@ function App() {
         apiRequest('/decants', {
           method: 'PUT',
           body: JSON.stringify({
-            sortOrder: nextDecantSortOrder,
+            sortOrder: nextDecantSortOrder < 0 ? decantSettings.sortOrder : nextDecantSortOrder,
             isEnabled: Boolean(decantSettings.isEnabled),
             sizes: (decantSettings.sizes || []).map((size) => ({
               ...(size._id ? { _id: size._id } : {}),
@@ -1447,15 +1480,21 @@ function App() {
             })),
           }),
         }),
+        apiRequest('/storefront-settings', {
+          method: 'PUT',
+          body: JSON.stringify({ chipOrder: nextChipOrder }),
+        }),
       ])
 
       setCategories(reorderedCategories)
       setDecantSettings(savedDecantSettings)
+      setChipOrder(savedStorefrontSettings?.chipOrder || nextChipOrder)
       setDashboardMessage('')
-      showSuccess('Orden de categorías y Decants actualizado correctamente.')
+      showSuccess('Orden de chips del storefront actualizado correctamente.')
     } catch (error) {
       setCategories(previousCategories)
       setDecantSettings(previousDecantSettings)
+      setChipOrder(previousChipOrder)
       setDashboardMessage(error.message)
     } finally {
       setIsSavingCategoryOrder(false)
@@ -1507,6 +1546,7 @@ function App() {
           reviewCount,
           imageUrls,
           hasFreeShipping: Boolean(productForm.hasFreeShipping),
+          isPublished: productForm.isPublished !== false,
         }),
       })
 
@@ -1525,6 +1565,24 @@ function App() {
       showSuccess(
         isEdit ? 'Publicación actualizada correctamente.' : 'Publicación creada correctamente.',
       )
+    } catch (error) {
+      setDashboardMessage(error.message)
+    }
+  }
+
+  async function handleToggleProductVisibility(product) {
+    const nextIsPublished = product.isPublished === false
+
+    try {
+      const savedProduct = await apiRequest(`/products/${product._id}/visibility`, {
+        method: 'PUT',
+        body: JSON.stringify({ isPublished: nextIsPublished }),
+      })
+
+      setProducts((current) =>
+        current.map((currentProduct) => (currentProduct._id === savedProduct._id ? savedProduct : currentProduct)),
+      )
+      showSuccess(nextIsPublished ? 'La publicación volvió a mostrarse en la tienda.' : 'La publicación quedó oculta en la tienda.')
     } catch (error) {
       setDashboardMessage(error.message)
     }
@@ -2374,6 +2432,20 @@ function App() {
                 <span className="selector-checkmark" aria-hidden="true" />
                 <span>Envío gratis para esta publicación</span>
               </label>
+              <label className={productForm.isPublished !== false ? 'selector-toggle selector-toggle--active grid-form__field--wide' : 'selector-toggle grid-form__field--wide'}>
+                <input
+                  type="checkbox"
+                  checked={productForm.isPublished !== false}
+                  onChange={(event) =>
+                    setProductForm((current) => ({ ...current, isPublished: event.target.checked }))
+                  }
+                />
+                <span className="selector-checkmark" aria-hidden="true" />
+                <span>Mostrar en la tienda</span>
+              </label>
+              <p className="section-helper section-helper--tight">
+                Si lo desactivas, la publicación se oculta en la tienda pero sigue guardada aquí para editarla después.
+              </p>
               <p className="section-helper section-helper--tight">
                 Arrastra las imágenes de izquierda a derecha para definir el orden que se verá en el storefront.
               </p>
@@ -2951,13 +3023,13 @@ function App() {
             </div>
 
             <p className="section-helper">
-              Arrastra las categorías para definir el orden. El storefront las mostrará de izquierda a derecha en este mismo orden.
+              Arrastra Todas, Promociones y las categorías para definir el orden de los chips en la tienda, de izquierda a derecha.
             </p>
 
             <div className="list-stack">
               {orderedCategoryItems.map((category, index) => {
-                const isDecantsCard = category.type === 'decants'
-                const isExpanded = !isDecantsCard && expandedCategoryIds.includes(category._id)
+                const isVirtualChip = category.type === 'decants' || category.type === 'all' || category.type === 'promos'
+                const isExpanded = !isVirtualChip && expandedCategoryIds.includes(category._id)
 
                 return (
                 <div
@@ -2972,7 +3044,7 @@ function App() {
                   onDrop={(event) => handleCategoryDrop(category._id, event)}
                   onDragEnd={resetCategoryDragState}
                   onClick={(event) => {
-                    if (isDecantsCard) {
+                    if (isVirtualChip) {
                       return
                     }
 
@@ -2991,15 +3063,19 @@ function App() {
                     <small className="list-item__order-label">Posición {index + 1}</small>
                     <span>{category.description || 'Sin descripción todavía.'}</span>
                     {category.hasFreeShipping ? renderFreeShippingBadge() : null}
-                    {!isDecantsCard ? (
+                    {category.type === 'category' ? (
                       <span className="list-item__hint">
                         {isExpanded ? 'Ocultar publicaciones' : 'Ver publicaciones de esta categoría'}
                       </span>
                     ) : (
-                      <span className="list-item__hint">Puedes ocultarla del catálogo desde Eliminar.</span>
+                      <span className="list-item__hint">
+                        {category.type === 'decants'
+                          ? 'Puedes ocultarla del catálogo desde Eliminar.'
+                          : 'Arrástrala para cambiar su lugar entre los chips de la tienda.'}
+                      </span>
                     )}
                   </div>
-                  {!isDecantsCard ? (
+                  {category.type === 'category' ? (
                     <div className="list-item__toolbar">
                       <button type="button" className="list-item__edit" onClick={() => openEditModal('category', category)}>
                         Modificar
@@ -3008,13 +3084,13 @@ function App() {
                         Eliminar
                       </button>
                     </div>
-                  ) : (
+                  ) : category.type === 'decants' ? (
                     <div className="list-item__toolbar">
                       <button type="button" className="list-item__delete" onClick={() => openDeleteModal('decants', category)}>
                         Eliminar
                       </button>
                     </div>
-                  )}
+                  ) : null}
 
                   {isExpanded ? (
                     <div className="category-linked-products">
@@ -3027,6 +3103,9 @@ function App() {
                               {product.hasFreeShipping || product.category?.hasFreeShipping ? renderFreeShippingBadge() : null}
                             </div>
                             <div className="row-actions">
+                              <button type="button" className="table-row__edit" onClick={() => handleToggleProductVisibility(product)}>
+                                {product.isPublished === false ? 'Mostrar' : 'Ocultar'}
+                              </button>
                               <button type="button" className="table-row__edit" onClick={() => openEditModal('product', product)}>
                                 Modificar
                               </button>
@@ -3077,6 +3156,9 @@ function App() {
                     {product.hasFreeShipping || product.category?.hasFreeShipping ? (
                       renderFreeShippingBadge()
                     ) : null}
+                    {product.isPublished === false ? (
+                      <span className="table-row__subcopy">Oculta en la tienda</span>
+                    ) : null}
                     {product.description ? (
                       <>
                         <span
@@ -3114,6 +3196,13 @@ function App() {
                     ) : null}
                   </span>
                   <div className="row-actions">
+                    <button
+                      type="button"
+                      className="table-row__edit"
+                      onClick={() => handleToggleProductVisibility(product)}
+                    >
+                      {product.isPublished === false ? 'Mostrar' : 'Ocultar'}
+                    </button>
                     <button type="button" className="table-row__edit" onClick={() => openEditModal('product', product)}>
                       Modificar
                     </button>
@@ -3124,6 +3213,8 @@ function App() {
                 </div>
               ))}
             </div>
+
+            {!products.length ? <p className="empty-state">Todavía no hay publicaciones creadas.</p> : null}
           </article>
         </section>
       )

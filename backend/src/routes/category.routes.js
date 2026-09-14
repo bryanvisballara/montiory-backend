@@ -3,7 +3,29 @@ import { asyncHandler } from '../lib/async-handler.js'
 import { createHttpError } from '../lib/http-error.js'
 import { requireAuth, requireRole } from '../middleware/auth.js'
 import Category from '../models/Category.js'
+import DecantSettings from '../models/DecantSettings.js'
 import Product from '../models/Product.js'
+import StorefrontSettings from '../models/StorefrontSettings.js'
+import { normalizeChipOrder } from '../lib/chip-order.js'
+
+async function persistChipOrder(chipOrder) {
+  const [categories, decantSettings] = await Promise.all([
+    Category.find().select('_id').lean(),
+    DecantSettings.findOne({ key: 'default' }).lean(),
+  ])
+
+  const nextChipOrder = normalizeChipOrder(
+    chipOrder,
+    categories.map((item) => String(item._id)),
+    Boolean(decantSettings?.isEnabled),
+  )
+
+  await StorefrontSettings.findOneAndUpdate(
+    { key: 'default' },
+    { $set: { chipOrder: nextChipOrder } },
+    { upsert: true },
+  )
+}
 
 const router = Router()
 
@@ -39,6 +61,10 @@ router.post(
       sortOrder: nextSortOrder,
       hasFreeShipping,
     })
+
+    const settings = await StorefrontSettings.findOne({ key: 'default' }).lean()
+    await persistChipOrder([...(settings?.chipOrder || []), String(category._id)])
+
     response.status(201).json(category)
   }),
 )
@@ -146,6 +172,9 @@ router.delete(
     if (!deletedCategory) {
       throw createHttpError(404, 'Category not found')
     }
+
+    const settings = await StorefrontSettings.findOne({ key: 'default' }).lean()
+    await persistChipOrder((settings?.chipOrder || []).filter((chipId) => chipId !== String(request.params.id)))
 
     response.status(204).send()
   }),

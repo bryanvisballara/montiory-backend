@@ -93,6 +93,7 @@ router.post(
       ? sizeOptions.reduce((totalStock, sizeOption) => totalStock + sizeOption.stock, 0)
       : stock
     const hasFreeShipping = Boolean(request.body.hasFreeShipping)
+    const isPublished = request.body.isPublished !== false
     const decantPrices = await normalizeDecantPrices(request.body.decantPrices)
 
     if (!name || !categoryId || Number.isNaN(basePrice) || Number.isNaN(offerPrice) || Number.isNaN(stock)) {
@@ -129,6 +130,7 @@ router.post(
       imageUrls,
       sizeOptions,
       hasFreeShipping,
+      isPublished,
       decantPrices,
     })
 
@@ -156,6 +158,7 @@ router.put(
       ? sizeOptions.reduce((totalStock, sizeOption) => totalStock + sizeOption.stock, 0)
       : stock
     const hasFreeShipping = Boolean(request.body.hasFreeShipping)
+    const isPublished = request.body.isPublished !== false
     const decantPrices = await normalizeDecantPrices(request.body.decantPrices)
 
     if (!name || !categoryId || Number.isNaN(basePrice) || Number.isNaN(offerPrice) || Number.isNaN(stock)) {
@@ -197,8 +200,26 @@ router.put(
     product.imageUrls = imageUrls
     product.sizeOptions = sizeOptions
     product.hasFreeShipping = hasFreeShipping
+    product.isPublished = isPublished
     product.decantPrices = decantPrices
     product.markModified('sizeOptions')
+    await product.save()
+
+    const populatedProduct = await Product.findById(product.id).populate('category', 'name hasFreeShipping').lean()
+    response.json(populatedProduct)
+  }),
+)
+
+router.put(
+  '/:id/visibility',
+  asyncHandler(async (request, response) => {
+    const product = await Product.findById(request.params.id)
+
+    if (!product) {
+      throw createHttpError(404, 'Product not found')
+    }
+
+    product.isPublished = request.body.isPublished !== false
     await product.save()
 
     const populatedProduct = await Product.findById(product.id).populate('category', 'name hasFreeShipping').lean()
