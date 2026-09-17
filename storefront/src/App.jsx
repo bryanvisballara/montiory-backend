@@ -261,6 +261,18 @@ function productHasPurchasableSizes(product) {
   return getInStockSizeOptions(product).length > 0
 }
 
+function isDecantCatalogProduct(product, decantSettings) {
+  return getVisibleDecantPrices(product, decantSettings).length > 0
+}
+
+function isPurchasableCatalogProduct(product, decantSettings) {
+  if (isDecantCatalogProduct(product, decantSettings)) {
+    return true
+  }
+
+  return productHasPurchasableSizes(product)
+}
+
 function productHasAnySelectedSizeInStock(product, selectedSizes) {
   if (!selectedSizes.length) {
     return true
@@ -2139,7 +2151,9 @@ function App() {
           ? payload.products
           : payload.products.filter((product) => product.category?._id === activeCategory)
 
-    return categoryProducts.filter((product) => productHasAnySelectedSizeInStock(product, selectedSizeFilters))
+    return categoryProducts
+      .filter((product) => productHasAnySelectedSizeInStock(product, selectedSizeFilters))
+      .filter((product) => isPurchasableCatalogProduct(product, payload.decantSettings))
   }, [activeCategory, payload.decantSettings, payload.products, selectedPromo, selectedSizeFilters])
 
   const cartCount = useMemo(
@@ -2364,6 +2378,17 @@ function App() {
   }, [apiBaseUrl, checkoutResultReference, isCheckoutResultRoute])
 
   function handleAddToCart(productId, quantity = 1, variant = null) {
+    const product = payload.products.find((item) => String(item._id) === String(productId))
+
+    if (
+      product
+      && variant?.kind !== 'decant'
+      && !isDecantCatalogProduct(product, payload.decantSettings)
+      && !variant?.sizeLabel
+    ) {
+      return
+    }
+
     const cartKey = buildCartItemKey(productId, variant)
 
     setCartItems((current) => ({
