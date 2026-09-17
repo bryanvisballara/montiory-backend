@@ -160,6 +160,20 @@ function getRouteProductId(pathname = window.location.pathname, search = window.
   return pathMatch?.[1] || ''
 }
 
+function getCheckoutResultLocation(pathname = window.location.pathname, search = window.location.search) {
+  const params = new URLSearchParams(search)
+  const path = String(pathname || '').replace(/\/+$/, '') || '/'
+  const reference = String(params.get('reference') || params.get('external_reference') || '').trim()
+  const isResultPath = path === '/checkout/resultado'
+  const isResultQuery = params.get('checkout') === 'resultado'
+  const isMercadoPagoReturn = Boolean(reference) && (params.has('payment_id') || params.has('collection_id') || params.has('status'))
+
+  return {
+    isCheckoutResultRoute: isResultPath || isResultQuery || isMercadoPagoReturn,
+    reference,
+  }
+}
+
 function isFallbackShippingZone(zone) {
   return Boolean(zone?.isFallback) || String(zone?.place || '').trim().toLowerCase() === 'otra'
 }
@@ -1040,8 +1054,8 @@ function CheckoutResultPage({ reference, sessionStatus, isLoading, message, onBa
   let description = 'Mercado Pago ya nos devolvió a tu tienda. Ahora estamos esperando la confirmación final del pago para cerrar el pedido.'
 
   if (isApproved) {
-    title = 'Pago confirmado'
-    description = 'Tu pedido ya fue aprobado. En unos segundos te llevaremos al WhatsApp del negocio con el resumen listo para enviar.'
+    title = 'Gracias por tu compra'
+    description = 'El pago quedó confirmado y ya estamos preparando tu pedido. Te enviamos el detalle al correo. Si quieres, también puedes escribirnos por WhatsApp.'
   } else if (isRejected) {
     title = 'No pudimos confirmar el pago'
     description = 'La transacción quedó en un estado final no aprobado. Puedes volver al catálogo e intentarlo nuevamente.'
@@ -2027,8 +2041,11 @@ function App() {
   const [cartItems, setCartItems] = useState({})
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
-  const [isCheckoutRoute, setIsCheckoutRoute] = useState(() => window.location.pathname === '/checkout')
-  const [isCheckoutResultRoute, setIsCheckoutResultRoute] = useState(() => window.location.pathname === '/checkout/resultado')
+  const [isCheckoutRoute, setIsCheckoutRoute] = useState(() => {
+    const path = String(window.location.pathname || '').replace(/\/+$/, '') || '/'
+    return path === '/checkout'
+  })
+  const [isCheckoutResultRoute, setIsCheckoutResultRoute] = useState(() => getCheckoutResultLocation().isCheckoutResultRoute)
   const [purchaseForm, setPurchaseForm] = useState({
     firstName: '',
     lastName: '',
@@ -2053,7 +2070,7 @@ function App() {
   const [routeProductId, setRouteProductId] = useState(() => getRouteProductId(window.location.pathname, window.location.search))
   const [isCartRoute, setIsCartRoute] = useState(() => window.location.pathname === '/carrito')
   const [checkoutResultReference, setCheckoutResultReference] = useState(
-    () => new URLSearchParams(window.location.search).get('reference') || '',
+    () => getCheckoutResultLocation().reference,
   )
   const [checkoutSessionStatus, setCheckoutSessionStatus] = useState(null)
   const [checkoutResultMessage, setCheckoutResultMessage] = useState('')
@@ -2065,7 +2082,6 @@ function App() {
   const [decantQuantities, setDecantQuantities] = useState({})
   const [selectedDecantSizes, setSelectedDecantSizes] = useState({})
   const { confirmationState, isConfirmationVisible, showConfirmation, startClosingConfirmation } = useCartConfirmation()
-  const checkoutResultRedirectRef = useRef(false)
 
   useEffect(() => {
     async function loadStorefront() {
@@ -2259,13 +2275,14 @@ function App() {
 
   useEffect(() => {
     function handlePopState() {
-      const { pathname } = window.location
-      const searchParams = new URLSearchParams(window.location.search)
-      setRouteProductId(getRouteProductId(pathname, window.location.search))
-      setIsCartRoute(pathname === '/carrito')
-      setIsCheckoutRoute(pathname === '/checkout')
-      setIsCheckoutResultRoute(pathname === '/checkout/resultado')
-      setCheckoutResultReference(searchParams.get('reference') || '')
+      const { pathname, search } = window.location
+      const path = String(pathname || '').replace(/\/+$/, '') || '/'
+      const resultLocation = getCheckoutResultLocation(pathname, search)
+      setRouteProductId(getRouteProductId(pathname, search))
+      setIsCartRoute(path === '/carrito')
+      setIsCheckoutRoute(path === '/checkout')
+      setIsCheckoutResultRoute(resultLocation.isCheckoutResultRoute)
+      setCheckoutResultReference(resultLocation.reference)
       setIsCartSidebarOpen(false)
       setQuickViewProduct(null)
     }
@@ -2279,7 +2296,6 @@ function App() {
       setCheckoutSessionStatus(null)
       setCheckoutResultMessage('')
       setIsCheckingCheckoutResult(false)
-      checkoutResultRedirectRef.current = false
       return undefined
     }
 
@@ -2312,12 +2328,6 @@ function App() {
 
         setCheckoutSessionStatus(result)
         setCheckoutResultMessage('')
-
-        if (result.status === 'approved' && result.whatsappUrl && !checkoutResultRedirectRef.current) {
-          checkoutResultRedirectRef.current = true
-          window.location.assign(result.whatsappUrl)
-          return
-        }
 
         if (['declined', 'voided', 'error', 'expired'].includes(result.status) && intervalId) {
           window.clearInterval(intervalId)

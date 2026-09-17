@@ -892,7 +892,7 @@ router.post(
       coupon: request.body.coupon,
       paymentMethod: 'online',
     })
-    const redirectUrl = `${getStorefrontBaseUrl()}/checkout/resultado?reference=${encodeURIComponent(reference)}`
+    const redirectUrl = `${getStorefrontBaseUrl()}/?checkout=resultado&reference=${encodeURIComponent(reference)}`
     const notificationUrl = getMercadoPagoWebhookUrl()
     const whatsappUrl = buildCheckoutWhatsAppLink({
       reference,
