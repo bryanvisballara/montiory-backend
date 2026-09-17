@@ -1,6 +1,6 @@
 import { sendBrevoEmail } from './brevo.js'
 import { buildAdminOrderNotificationEmail, buildOrderPlacedEmail } from './email-templates.js'
-import { getItemProductLinks } from './storefront-urls.js'
+import { getItemProductLinks, getOrderStorefrontUrl } from './storefront-urls.js'
 import { buildPaidOrderTelegramMessage, sendTelegramMessage } from './telegram.js'
 
 function formatCurrency(value) {
@@ -40,6 +40,7 @@ export async function notifyPaidOrder({ order, customer, session }) {
         ...plain,
         promoItems: plain.promoItems?.length ? plain.promoItems : sessionItem.promoItems || [],
         product: plain.product || sessionItem.product || null,
+        productId: plain.productId || sessionItem.productId || plain.product || sessionItem.product || null,
       }
     }),
   )
@@ -117,6 +118,7 @@ export async function notifyPaidOrder({ order, customer, session }) {
         couponName,
         totalAmount: totalAmountLabel,
         paymentMethod: 'Mercado Pago · pago en línea',
+        orderUrl: getOrderStorefrontUrl(reference),
       }),
     ),
   ])

@@ -35,6 +35,7 @@ MERCADOPAGO_WEBHOOK_SECRET=<clave_secreta_del_webhook>
 API_PUBLIC_URL=https://montiory-backend.onrender.com
 TELEGRAM_BOT_TOKEN=<token_del_bot_de_telegram>
 TELEGRAM_CHAT_ID=<chat_id_del_grupo_o_usuario>
+RENDER_DEPLOY_HOOK=<url_del_deploy_hook_de_render>
 
 Frontend Admin
 

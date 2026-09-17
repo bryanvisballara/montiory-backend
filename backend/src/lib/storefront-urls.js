@@ -21,10 +21,30 @@ export function slugifyProductName(name) {
     .replace(/(^-|-$)/g, '')
 }
 
+function resolveStorefrontId(value) {
+  if (!value) {
+    return ''
+  }
+
+  if (typeof value === 'object') {
+    return String(value._id || value.id || value).trim()
+  }
+
+  return String(value).trim()
+}
+
+export function getOrderStorefrontUrl(reference) {
+  const ref = String(reference || '').trim()
+
+  if (!ref) {
+    return getPublicStorefrontBaseUrl()
+  }
+
+  return `${getPublicStorefrontBaseUrl()}/?checkout=resultado&reference=${encodeURIComponent(ref)}`
+}
+
 export function getProductStorefrontUrl({ name, productId }) {
-  const id = typeof productId === 'object' && productId
-    ? String(productId._id || productId.id || productId).trim()
-    : String(productId || '').trim()
+  const id = resolveStorefrontId(productId)
 
   if (!id || id === '[object Object]') {
     return ''
@@ -51,7 +71,7 @@ export function getItemProductLinks(item = {}) {
 
   const url = item.productUrl || getProductStorefrontUrl({
     name: item.name,
-    productId: item.product?._id || item.product || item.productId,
+    productId: item.productId || item.product?._id || item.product,
   })
 
   return url ? [{ name: item.name, url }] : []

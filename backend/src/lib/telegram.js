@@ -39,6 +39,7 @@ export function buildPaidOrderTelegramMessage({
   couponName,
   totalAmount,
   paymentMethod,
+  orderUrl = '',
 }) {
   const customerName = `${customer.firstName || ''} ${customer.lastName || ''}`.trim()
   const phone = `${customer.phoneCountryCode || '+57'} ${customer.phone || ''}`.trim()
@@ -57,7 +58,7 @@ export function buildPaidOrderTelegramMessage({
       : item.productUrl
         ? [{ name: item.name, url: item.productUrl }]
         : []
-    const linkLines = links.map((link) => (links.length > 1 ? `  ${link.name}: ${link.url}` : `  ${link.url}`))
+    const linkLines = links.map((link) => `  ${link.url}`)
 
     return [`- ${item.name}${variant} x${item.quantity}`, ...linkLines]
   })
@@ -66,6 +67,7 @@ export function buildPaidOrderTelegramMessage({
     'Compra pagada en Montiory',
     '',
     `Referencia: ${reference}`,
+    orderUrl ? `Ver pedido: ${orderUrl}` : null,
     `Pago: ${paymentMethod || 'Pago en línea'}`,
     '',
     `Cliente: ${customerName}`,

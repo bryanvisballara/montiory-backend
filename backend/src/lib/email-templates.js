@@ -6,57 +6,46 @@ function formatCurrency(value) {
   }).format(Number(value || 0))
 }
 
-function shellTemplate({ title, heading, intro, accent, body }) {
-  const blackText = 'color:#111111;-webkit-text-fill-color:#111111;'
+function paintBlack(text) {
+  return `<span style="color:#111111;background-color:#ffffff;background-image:linear-gradient(#111111,#111111);background-repeat:repeat;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">${text}</span>`
+}
 
+function shellTemplate({ title, heading, intro, accent, body }) {
   return `
-    <div style="margin:0;background:#f4efe6;padding:32px 16px;font-family:Arial,sans-serif;color:#111111;color-scheme:light only;">
-      <meta name="color-scheme" content="light">
-      <meta name="supported-color-schemes" content="light">
-      <style>
-        :root { color-scheme: light only; }
-        .email-heading, .email-intro, .email-heading span, .email-intro span {
-          color: #111111 !important;
-          -webkit-text-fill-color: #111111 !important;
-        }
-        @media (prefers-color-scheme: dark) {
-          .email-heading, .email-intro, .email-heading span, .email-intro span {
-            color: #111111 !important;
-            -webkit-text-fill-color: #111111 !important;
-          }
-        }
-        [data-ogsc] .email-heading, [data-ogsc] .email-intro,
-        [data-ogsc] .email-heading span, [data-ogsc] .email-intro span,
-        [data-ogsb] .email-heading, [data-ogsb] .email-intro {
-          color: #111111 !important;
-          -webkit-text-fill-color: #111111 !important;
-        }
-      </style>
-      <div style="max-width:640px;margin:0 auto;background:#fffdf9;border:1px solid #e7d7bc;border-radius:28px;overflow:hidden;box-shadow:0 20px 50px rgba(43,26,14,0.12);">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
-          <tr>
-            <td bgcolor="#fff8ef" style="padding:32px 32px 18px;background-color:#fff8ef;border-bottom:1px solid #efe1c9;">
-              <div style="display:inline-block;padding:8px 12px;border:1px solid #c7b79f;border-radius:999px;${blackText}letter-spacing:0.2em;font-size:11px;text-transform:uppercase;font-weight:700;">Montiory</div>
-              <h1 class="email-heading" style="margin:18px 0 10px;font-size:36px;line-height:1.15;${blackText}font-family:Georgia,serif;">
-                <span style="${blackText}background-color:#fff8ef;">${heading}</span>
-              </h1>
-              <p class="email-intro" style="margin:0;${blackText}font-size:16px;line-height:1.6;">
-                <span style="${blackText}background-color:#fff8ef;">${intro}</span>
-              </p>
-            </td>
-          </tr>
-        </table>
-        <div style="padding:8px 32px 32px;">
-          <div style="background:#fffbf4;border:1px solid #ecdfc8;border-radius:22px;padding:22px;color:#111111;">
-            ${body}
+    <!DOCTYPE html>
+    <html lang="es">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="color-scheme" content="light only">
+        <meta name="supported-color-schemes" content="light">
+      </head>
+      <body style="margin:0;background:#ffffff;padding:32px 16px;font-family:Arial,sans-serif;color:#111111;">
+        <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e7d7bc;border-radius:28px;overflow:hidden;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+            <tr>
+              <td bgcolor="#ffffff" style="padding:32px 32px 18px;background-color:#ffffff;border-bottom:1px solid #efe1c9;">
+                <div style="display:inline-block;padding:8px 12px;border:1px solid #c7b79f;border-radius:999px;color:#111111;letter-spacing:0.2em;font-size:11px;text-transform:uppercase;font-weight:700;">Montiory</div>
+                <h1 class="email-heading" style="margin:18px 0 10px;font-size:36px;line-height:1.15;color:#111111;font-family:Georgia,serif;">
+                  ${paintBlack(heading)}
+                </h1>
+                <p class="email-intro" style="margin:0;color:#111111;font-size:16px;line-height:1.6;">
+                  ${paintBlack(intro)}
+                </p>
+              </td>
+            </tr>
+          </table>
+          <div style="padding:8px 32px 32px;">
+            <div class="email-body" style="background:#ffffff;border:1px solid #ecdfc8;border-radius:22px;padding:22px;color:#111111;">
+              ${body}
+            </div>
+            <div style="margin-top:24px;padding:18px 20px;border-radius:20px;background:${accent};color:#111111;font-weight:700;text-align:center;">
+              ${paintBlack(title)}
+            </div>
+            <p style="margin:22px 0 0;color:#111111;font-size:13px;line-height:1.6;">Este correo fue enviado por orders@montiory.com</p>
           </div>
-          <div style="margin-top:24px;padding:18px 20px;border-radius:20px;background:${accent};${blackText}font-weight:700;text-align:center;">
-            ${title}
-          </div>
-          <p style="margin:22px 0 0;color:#3d2c1c;-webkit-text-fill-color:#3d2c1c;font-size:13px;line-height:1.6;">Este correo fue enviado por orders@montiory.com</p>
         </div>
-      </div>
-    </div>
+      </body>
+    </html>
   `
 }
 
