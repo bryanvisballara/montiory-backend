@@ -71,7 +71,7 @@ function getStorefrontBaseUrl() {
 }
 
 function getWhatsAppPhoneNumber() {
-  return String(process.env.WHATSAPP_PHONE_NUMBER || '573001767364').replace(/\D/g, '')
+  return String(process.env.WHATSAPP_PHONE_NUMBER || '573043909551').replace(/\D/g, '')
 }
 
 function buildWhatsAppUrl(message) {

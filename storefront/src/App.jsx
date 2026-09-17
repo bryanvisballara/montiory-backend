@@ -6,7 +6,7 @@ const isLocalHost = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].
 const apiBaseUrl = import.meta.env.VITE_API_URL || (isLocalHost ? 'http://localhost:10000/api' : 'https://montiory-backend.onrender.com/api')
 const brandLogoUrl = `${import.meta.env.BASE_URL}montiory-logo.jpg`
 const instagramUrl = 'https://www.instagram.com/montiory.co?igsh=MWN6a2w3Y245MGNwOA=='
-const whatsappPhoneNumber = '573007266022'
+const whatsappPhoneNumber = '573043909551'
 const defaultWhatsAppMessage = 'Hola Montiory, estoy interesado en sus productos. ¿Podrías darme más información?'
 const fallbackImage =
   'https://images.unsplash.com/photo-1594035910387-fea47794261f?auto=format&fit=crop&w=900&q=80'
