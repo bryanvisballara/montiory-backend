@@ -147,9 +147,17 @@ function getProductPath(product) {
   return `/producto/${slugify(product.name)}-${product._id}`
 }
 
-function getRouteProductId(pathname) {
-  const match = pathname.match(/-([a-f0-9]{24})$/i)
-  return match?.[1] || ''
+function getRouteProductId(pathname = window.location.pathname, search = window.location.search) {
+  const queryId = String(new URLSearchParams(search).get('producto') || '').trim()
+
+  if (queryId) {
+    const queryMatch = queryId.match(/([a-f0-9]{24})$/i)
+    return queryMatch?.[1] || queryId
+  }
+
+  const cleanPath = String(pathname || '').split('?')[0].replace(/\/+$/, '')
+  const pathMatch = cleanPath.match(/([a-f0-9]{24})$/i)
+  return pathMatch?.[1] || ''
 }
 
 function isFallbackShippingZone(zone) {
@@ -2042,7 +2050,7 @@ function App() {
   const [checkoutCouponMessage, setCheckoutCouponMessage] = useState('')
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false)
   const [appliedCheckoutCoupon, setAppliedCheckoutCoupon] = useState(null)
-  const [routeProductId, setRouteProductId] = useState(() => getRouteProductId(window.location.pathname))
+  const [routeProductId, setRouteProductId] = useState(() => getRouteProductId(window.location.pathname, window.location.search))
   const [isCartRoute, setIsCartRoute] = useState(() => window.location.pathname === '/carrito')
   const [checkoutResultReference, setCheckoutResultReference] = useState(
     () => new URLSearchParams(window.location.search).get('reference') || '',
@@ -2131,7 +2139,7 @@ function App() {
   )
 
   const routeProduct = useMemo(
-    () => payload.products.find((product) => product._id === routeProductId) || null,
+    () => payload.products.find((product) => String(product._id) === String(routeProductId)) || null,
     [payload.products, routeProductId],
   )
 
@@ -2253,7 +2261,7 @@ function App() {
     function handlePopState() {
       const { pathname } = window.location
       const searchParams = new URLSearchParams(window.location.search)
-      setRouteProductId(getRouteProductId(pathname))
+      setRouteProductId(getRouteProductId(pathname, window.location.search))
       setIsCartRoute(pathname === '/carrito')
       setIsCheckoutRoute(pathname === '/checkout')
       setIsCheckoutResultRoute(pathname === '/checkout/resultado')

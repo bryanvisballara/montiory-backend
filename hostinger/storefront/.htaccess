@@ -1,12 +1,12 @@
 DirectoryIndex index.html
-ErrorDocument 404 /admin/index.html
+ErrorDocument 404 /storefront/index.html
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  RewriteBase /admin/
+  RewriteBase /storefront/
 
   RewriteRule ^index\.html$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule . /admin/index.html [L,QSA]
+  RewriteRule . /storefront/index.html [L,QSA]
 </IfModule>

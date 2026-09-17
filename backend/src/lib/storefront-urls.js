@@ -22,15 +22,15 @@ export function slugifyProductName(name) {
 }
 
 export function getProductStorefrontUrl({ name, productId }) {
-  const id = String(productId || '').trim()
+  const id = typeof productId === 'object' && productId
+    ? String(productId._id || productId.id || productId).trim()
+    : String(productId || '').trim()
 
-  if (!id) {
+  if (!id || id === '[object Object]') {
     return ''
   }
 
-  const slug = slugifyProductName(name)
-  const path = slug ? `/producto/${slug}-${id}` : `/producto/${id}`
-  return `${getPublicStorefrontBaseUrl()}${path}`
+  return `${getPublicStorefrontBaseUrl()}/?producto=${encodeURIComponent(id)}`
 }
 
 export function getItemProductLinks(item = {}) {
