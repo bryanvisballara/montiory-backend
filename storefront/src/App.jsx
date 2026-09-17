@@ -698,6 +698,8 @@ function CheckoutPage({
   onRemoveCoupon,
   onSelectShippingZone,
   onSubmit,
+  onPayOnline,
+  isPayingOnline,
 }) {
   const fallbackShippingZone = shippingZones.find((zone) => isFallbackShippingZone(zone)) || null
   const visibleShippingZones = shippingZones.filter((zone) => !isFallbackShippingZone(zone))
@@ -922,9 +924,19 @@ function CheckoutPage({
 
             {message ? <p className="status-copy status-copy--error purchase-form__full">{message}</p> : null}
 
-            <button type="submit" className="button-primary purchase-form__submit" disabled={isSubmitting || !items.length}>
-              {isSubmitting ? 'Abriendo WhatsApp...' : 'Confirmar por WhatsApp'}
-            </button>
+            <div className="checkout-actions">
+              <button type="submit" className="button-primary purchase-form__submit" disabled={isSubmitting || isPayingOnline || !items.length}>
+                {isSubmitting ? 'Abriendo WhatsApp...' : 'Confirmar por WhatsApp'}
+              </button>
+              <button
+                type="button"
+                className="button-secondary purchase-form__submit"
+                disabled={isSubmitting || isPayingOnline || !items.length}
+                onClick={onPayOnline}
+              >
+                {isPayingOnline ? 'Redirigiendo a Mercado Pago...' : 'Pagar en línea'}
+              </button>
+            </div>
           </form>
         </article>
 
@@ -1013,7 +1025,7 @@ function CheckoutResultPage({ reference, sessionStatus, isLoading, message, onBa
 
   let eyebrow = 'Pago en línea'
   let title = 'Estamos validando tu pago'
-  let description = 'Wompi ya nos devolvió a tu tienda. Ahora estamos esperando la confirmación final del webhook para cerrar el pedido.'
+  let description = 'Mercado Pago ya nos devolvió a tu tienda. Ahora estamos esperando la confirmación final del pago para cerrar el pedido.'
 
   if (isApproved) {
     title = 'Pago confirmado'
@@ -1040,7 +1052,7 @@ function CheckoutResultPage({ reference, sessionStatus, isLoading, message, onBa
             </div>
             {sessionStatus?.transactionId ? (
               <div>
-                <span>Transacción Wompi</span>
+                <span>Transacción</span>
                 <strong>{sessionStatus.transactionId}</strong>
               </div>
             ) : null}
@@ -2003,6 +2015,7 @@ function App() {
   })
   const [purchaseMessage, setPurchaseMessage] = useState('')
   const [isSubmittingPurchase, setIsSubmittingPurchase] = useState(false)
+  const [isPayingOnline, setIsPayingOnline] = useState(false)
   const [checkoutCouponName, setCheckoutCouponName] = useState('')
   const [checkoutCouponMessage, setCheckoutCouponMessage] = useState('')
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false)
@@ -2637,68 +2650,80 @@ function App() {
     })
   }
 
+  function getCheckoutValidationMessage() {
+    if (!selectedShippingZone) {
+      return 'Selecciona una ciudad de envío para continuar.'
+    }
+
+    if (selectedShippingZoneId === otherShippingOptionId && !purchaseForm.city.trim()) {
+      return 'Escribe la ciudad para el envío marcado como Otra.'
+    }
+
+    if (!purchaseForm.shippingConsent) {
+      return 'Debes aceptar las notificaciones de envío antes de continuar.'
+    }
+
+    return ''
+  }
+
+  function buildCheckoutPayload(paymentMethod) {
+    const resolvedCity = selectedShippingZoneId === otherShippingOptionId
+      ? purchaseForm.city.trim()
+      : selectedShippingZone.place
+
+    return {
+      customer: {
+        ...purchaseForm,
+        city: resolvedCity,
+      },
+      paymentMethod,
+      items: cartProducts.map((item) => ({
+        productId: item.product._id,
+        name: item.displayName,
+        variantLabel: item.sizeLabel || undefined,
+        decantSizeId: item.decantSizeId || undefined,
+        quantity: item.quantity,
+        unitPrice: Number(item.unitPrice || 0),
+        lineTotal: item.lineTotal,
+        promoId: item.promoId || undefined,
+        promoItems: item.promoItems || undefined,
+      })),
+      shippingZone: {
+        id: selectedShippingZone._id,
+        place: resolvedCity,
+        price: Number(selectedShippingZone.price || 0),
+        eta: selectedShippingZone.eta || '',
+      },
+      coupon: appliedCheckoutCoupon
+        ? {
+            id: appliedCheckoutCoupon.coupon.id,
+            name: appliedCheckoutCoupon.coupon.name,
+            discountAmount: checkoutDiscountAmount,
+            eligibleProductIds: appliedCheckoutCoupon.eligibleProductIds,
+          }
+        : null,
+      subtotalAmount: cartSubtotal,
+      discountAmount: checkoutDiscountAmount,
+      surchargeAmount: cartSurchargeAmount,
+      totalAmount: cartTotalAmount,
+    }
+  }
+
   async function handlePurchaseSubmit(event) {
     event.preventDefault()
     setPurchaseMessage('')
 
-    if (!selectedShippingZone) {
-      setPurchaseMessage('Selecciona una ciudad de envío para continuar.')
-      return
-    }
+    const validationMessage = getCheckoutValidationMessage()
 
-    if (selectedShippingZoneId === otherShippingOptionId && !purchaseForm.city.trim()) {
-      setPurchaseMessage('Escribe la ciudad para el envío marcado como Otra.')
-      return
-    }
-
-    if (!purchaseForm.shippingConsent) {
-      setPurchaseMessage('Debes aceptar las notificaciones de envío antes de continuar.')
+    if (validationMessage) {
+      setPurchaseMessage(validationMessage)
       return
     }
 
     setIsSubmittingPurchase(true)
 
     try {
-      const resolvedCity = selectedShippingZoneId === otherShippingOptionId
-        ? purchaseForm.city.trim()
-        : selectedShippingZone.place
-      const checkoutPayload = {
-        customer: {
-          ...purchaseForm,
-          city: resolvedCity,
-        },
-        paymentMethod: 'whatsapp',
-        items: cartProducts.map((item) => ({
-          productId: item.product._id,
-          name: item.displayName,
-          variantLabel: item.sizeLabel || undefined,
-          decantSizeId: item.decantSizeId || undefined,
-          quantity: item.quantity,
-          unitPrice: Number(item.unitPrice || 0),
-          lineTotal: item.lineTotal,
-          promoId: item.promoId || undefined,
-          promoItems: item.promoItems || undefined,
-        })),
-        shippingZone: {
-          id: selectedShippingZone._id,
-          place: resolvedCity,
-          price: Number(selectedShippingZone.price || 0),
-          eta: selectedShippingZone.eta || '',
-        },
-        coupon: appliedCheckoutCoupon
-          ? {
-              id: appliedCheckoutCoupon.coupon.id,
-              name: appliedCheckoutCoupon.coupon.name,
-              discountAmount: checkoutDiscountAmount,
-              eligibleProductIds: appliedCheckoutCoupon.eligibleProductIds,
-            }
-          : null,
-        subtotalAmount: cartSubtotal,
-        discountAmount: checkoutDiscountAmount,
-        surchargeAmount: cartSurchargeAmount,
-        totalAmount: cartTotalAmount,
-      }
-
+      const checkoutPayload = buildCheckoutPayload('whatsapp')
       const reference = `MONTIORY-${Date.now()}`
       const whatsappOrderUrl = buildCheckoutWhatsAppLink({ ...checkoutPayload, reference }, cartTotalAmount)
 
@@ -2744,20 +2769,58 @@ function App() {
     }
   }
 
+  async function handlePayOnline() {
+    setPurchaseMessage('')
+
+    const validationMessage = getCheckoutValidationMessage()
+
+    if (validationMessage) {
+      setPurchaseMessage(validationMessage)
+      return
+    }
+
+    setIsPayingOnline(true)
+
+    try {
+      const checkoutPayload = buildCheckoutPayload('online')
+      const response = await fetch(`${apiBaseUrl}/storefront/checkout/online/session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(checkoutPayload),
+      })
+      const payload = await response.json().catch(() => null)
+
+      if (!response.ok) {
+        throw new Error(payload?.message || 'No fue posible iniciar el pago en línea.')
+      }
+
+      if (!payload?.checkoutUrl) {
+        throw new Error('Mercado Pago no devolvió una URL de pago.')
+      }
+
+      window.location.assign(payload.checkoutUrl)
+    } catch (error) {
+      setPurchaseMessage(error.message)
+      setIsPayingOnline(false)
+    }
+  }
+
   return (
     <main className="store-shell">
       <section className="hero-section">
         <header className="topbar">
-          <div className="topbar__logo" aria-hidden="true">
-            <img src={brandLogoUrl} alt="Logo Montiory" />
-          </div>
+          <button type="button" className="topbar__logo" aria-label="Ir al inicio" onClick={handleBackToCatalog}>
+            <img src={brandLogoUrl} alt="" />
+          </button>
 
-          <div className="topbar__wordmark" id="inicio">
+          <button type="button" className="topbar__wordmark" id="inicio" aria-label="Ir al inicio" onClick={handleBackToCatalog}>
             <strong>
               <span>MONTIORY</span>
             </strong>
             <span className="topbar__tagline">VISTE DE MODA</span>
-          </div>
+          </button>
 
           <button type="button" className="cart-button" aria-label={`Carrito con ${cartCount} productos`} onClick={handleOpenCart}>
             <CartIcon />
@@ -2791,6 +2854,7 @@ function App() {
             formValues={purchaseForm}
             message={purchaseMessage}
             isSubmitting={isSubmittingPurchase}
+            isPayingOnline={isPayingOnline}
             couponName={checkoutCouponName}
             couponMessage={checkoutCouponMessage}
             isApplyingCoupon={isApplyingCoupon}
@@ -2811,6 +2875,7 @@ function App() {
             onRemoveCoupon={handleRemoveCheckoutCoupon}
             onSelectShippingZone={handleSelectShippingZone}
             onSubmit={handlePurchaseSubmit}
+            onPayOnline={handlePayOnline}
           />
         ) : isCheckoutResultRoute ? (
           <CheckoutResultPage

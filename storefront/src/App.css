@@ -58,6 +58,7 @@
 }
 
 .cart-button:hover,
+.topbar__logo:hover,
 .chip:hover,
 .detail-back:hover,
 .product-hover-actions__button:hover {
@@ -184,6 +185,15 @@
   backdrop-filter: blur(14px);
 }
 
+.topbar__logo,
+.topbar__wordmark {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
 .topbar__logo {
   width: 72px;
   height: 72px;
@@ -194,6 +204,7 @@
   padding: 8px;
   background: radial-gradient(circle at 30% 30%, rgba(243, 211, 147, 0.16), rgba(0, 0, 0, 0));
   border: 1px solid rgba(233, 198, 128, 0.2);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
 }
 
 .topbar__logo img {
@@ -208,6 +219,23 @@
   justify-items: center;
   gap: 4px;
   text-align: center;
+  border: none;
+  background: none;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+}
+
+.topbar__wordmark:hover,
+.topbar__wordmark:focus-visible {
+  opacity: 0.78;
+}
+
+.topbar__logo:focus-visible,
+.topbar__wordmark:focus-visible,
+.cart-button:focus-visible {
+  outline: 2px solid rgba(29, 27, 24, 0.28);
+  outline-offset: 3px;
 }
 
 .topbar__wordmark > span {
@@ -343,7 +371,8 @@
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
 }
 
-.cart-button:hover {
+.cart-button:hover,
+.topbar__logo:hover {
   transform: translateY(-1px);
   border-color: rgba(243, 211, 147, 0.36);
   box-shadow: 0 18px 34px rgba(0, 0, 0, 0.22);
@@ -2556,8 +2585,14 @@
 }
 
 .purchase-form__full,
-.purchase-form__submit {
+.purchase-form__submit,
+.checkout-actions {
   grid-column: span 2;
+}
+
+.checkout-actions {
+  display: grid;
+  gap: 10px;
 }
 
 .coupon-field {

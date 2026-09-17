@@ -72,16 +72,16 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;')
 }
 
-export function buildOrderPlacedEmail({ customerName, orderReference, items, totalAmount, shippingPlace }) {
+export function buildOrderPlacedEmail({ customerName, orderReference, items, totalAmount, shippingPlace, shippingPrice }) {
   return shellTemplate({
-    title: 'Tu pedido está siendo preparado',
-    heading: `Gracias por elegir Montiory, ${customerName}`,
-    intro: 'Tu orden fue confirmada correctamente y nuestro equipo ya la está preparando con el cuidado y detalle que merece.',
+    title: 'Compra exitosa',
+    heading: `¡Tu compra fue exitosa, ${customerName}!`,
+    intro: 'El pago quedó confirmado y ya estamos preparando tu pedido para despacho.',
     accent: 'linear-gradient(135deg,#f3d393,#bf8b32)',
     body: `
-      <p style="margin:0 0 14px;color:#24180f;line-height:1.7;">${orderReference ? `La orden <strong>${escapeHtml(orderReference)}</strong> fue registrada correctamente.` : 'Tu compra fue registrada correctamente.'} Muy pronto recibirás un nuevo correo con la guía de seguimiento.</p>
-      ${buildOrderSummaryCard({ items, totalAmount, shippingPlace })}
-      <p style="margin:14px 0 0;color:#6d5943;line-height:1.7;">Gracias por confiar en una selección pensada para hacerte sentir distinto desde el primer acorde.</p>
+      <p style="margin:0 0 14px;color:#24180f;line-height:1.7;">${orderReference ? `La orden <strong>${escapeHtml(orderReference)}</strong> se pagó correctamente.` : 'Tu compra se pagó correctamente.'} Muy pronto recibirás un nuevo correo con la guía de seguimiento.</p>
+      ${buildOrderSummaryCard({ items, totalAmount, shippingPlace, shippingPrice })}
+      <p style="margin:14px 0 0;color:#6d5943;line-height:1.7;">Gracias por comprar en Montiory.</p>
     `,
   })
 }
@@ -122,6 +122,8 @@ export function buildAdminOrderNotificationEmail({
   baseSubtotalAmount,
   discountAmount,
   totalAmount,
+  paid = false,
+  paymentMethod = '',
 }) {
   const customerName = `${customer.firstName || ''} ${customer.lastName || ''}`.trim()
   const itemsMarkup = items
@@ -129,7 +131,7 @@ export function buildAdminOrderNotificationEmail({
       (item) => `
         <tr>
           <td style="padding:12px 0;color:#24180f;vertical-align:top;">
-            <strong>${escapeHtml(item.name)}</strong><br />
+            <strong>${escapeHtml(item.name)}</strong>${item.variantLabel ? `<br /><span style="color:#6d5943;font-size:13px;">Talla: ${escapeHtml(item.variantLabel)}</span>` : ''}<br />
             <span style="color:#6d5943;font-size:13px;">${item.quantity} x ${escapeHtml(item.unitPriceLabel)}</span>
           </td>
           <td style="padding:12px 0;color:#2d1c10;text-align:right;vertical-align:top;font-weight:700;">${escapeHtml(item.lineTotalLabel)}</td>
@@ -144,8 +146,10 @@ export function buildAdminOrderNotificationEmail({
 
   return shellTemplate({
     title: `Orden ${escapeHtml(reference)}`,
-    heading: 'Nueva orden recibida',
-    intro: 'Un cliente completó el checkout y fue enviado a la pasarela de pagos. Revisa los datos de esta orden.',
+    heading: paid ? 'Compra pagada para despacho' : 'Nueva orden recibida',
+    intro: paid
+      ? 'El pago fue confirmado. Estos son los datos para preparar y despachar el pedido.'
+      : 'Un cliente completó el checkout y fue enviado a la pasarela de pagos. Revisa los datos de esta orden.',
     accent: 'linear-gradient(135deg,#f3d393,#bf8b32)',
     body: `
       <div style="display:grid;gap:18px;">
@@ -153,9 +157,10 @@ export function buildAdminOrderNotificationEmail({
           <p style="margin:0;color:#24180f;line-height:1.7;"><strong>Referencia:</strong> ${escapeHtml(reference)}</p>
           <p style="margin:0;color:#24180f;line-height:1.7;"><strong>Cliente:</strong> ${escapeHtml(customerName)}</p>
           <p style="margin:0;color:#24180f;line-height:1.7;"><strong>Correo:</strong> ${escapeHtml(customer.email)}</p>
-          <p style="margin:0;color:#24180f;line-height:1.7;"><strong>Teléfono:</strong> ${escapeHtml(customer.phone)}</p>
+          <p style="margin:0;color:#24180f;line-height:1.7;"><strong>Teléfono:</strong> ${escapeHtml(`${customer.phoneCountryCode || '+57'} ${customer.phone || ''}`.trim())}</p>
           <p style="margin:0;color:#24180f;line-height:1.7;"><strong>Documento:</strong> ${escapeHtml(customer.documentType)} ${escapeHtml(customer.documentNumber)}</p>
-          <p style="margin:0;color:#24180f;line-height:1.7;"><strong>Dirección:</strong> ${escapeHtml(customer.address)}, ${escapeHtml(customer.neighborhood)}, ${escapeHtml(customer.city)}, ${escapeHtml(customer.state)}</p>
+          <p style="margin:0;color:#24180f;line-height:1.7;"><strong>Dirección de despacho:</strong> ${escapeHtml(customer.address)}, ${escapeHtml(customer.neighborhood)}, ${escapeHtml(customer.city)}, ${escapeHtml(customer.state)}</p>
+          ${paymentMethod ? `<p style="margin:0;color:#24180f;line-height:1.7;"><strong>Pago:</strong> ${escapeHtml(paymentMethod)}</p>` : ''}
         </div>
         <div style="padding:16px;border-radius:18px;background:#fff7ea;border:1px solid #ecdfc8;">
           <div style="font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#8a6420;margin-bottom:8px;">Productos</div>

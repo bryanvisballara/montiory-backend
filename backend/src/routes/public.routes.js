@@ -7,6 +7,17 @@ import { buildAdminOrderNotificationEmail, buildOrderPlacedEmail } from '../lib/
 import { createHttpError } from '../lib/http-error.js'
 import { buildPartnerSaleData, findPartnerByCouponId } from '../lib/partners.js'
 import { notifyPartnerSale } from './partner.routes.js'
+import { notifyPaidOrder } from '../lib/order-notifications.js'
+import {
+  createMercadoPagoPreference,
+  getMercadoPagoMerchantOrder,
+  getMercadoPagoPayment,
+  getMercadoPagoAccessToken,
+  getMercadoPagoWebhookUrl,
+  mapMercadoPagoPaymentStatus,
+  parseMercadoPagoNotification,
+  verifyMercadoPagoWebhookSignature,
+} from '../lib/mercadopago.js'
 import Category from '../models/Category.js'
 import CheckoutSession from '../models/CheckoutSession.js'
 import Customer from '../models/Customer.js'
@@ -548,22 +559,9 @@ async function finalizeApprovedCheckoutSession(session) {
   })
 
   try {
-    await sendBrevoEmail({
-      to: {
-        email: customer.email,
-        name: `${customer.firstName} ${customer.lastName}`,
-      },
-      subject: 'Tu pedido en Montiory está siendo preparado',
-      htmlContent: buildOrderPlacedEmail({
-        customerName: customer.firstName,
-        orderReference: order.reference,
-        items: order.items,
-        totalAmount: order.totalAmount,
-        shippingPlace: order.shippingPlace,
-      }),
-    })
+    await notifyPaidOrder({ order, customer, session })
   } catch (error) {
-    console.error('Order placed email failed after Wompi approval', error)
+    console.error('Paid order notifications failed', error)
   }
 
   if (partnerSaleData.partner) {
@@ -879,11 +877,8 @@ router.post(
 router.post(
   '/checkout/online/session',
   asyncHandler(async (request, response) => {
-    const wompiPublicKey = process.env.WOMPI_PUBLIC_KEY?.trim()
-    const wompiIntegritySecret = process.env.WOMPI_INTEGRITY_SECRET?.trim()
-
-    if (!wompiPublicKey || !wompiIntegritySecret) {
-      throw createHttpError(500, 'Wompi no está configurado en el servidor')
+    if (!getMercadoPagoAccessToken()) {
+      throw createHttpError(500, 'Mercado Pago no está configurado en el servidor')
     }
 
     const reference = createCheckoutReference()
@@ -895,8 +890,7 @@ router.post(
       paymentMethod: 'online',
     })
     const redirectUrl = `${getStorefrontBaseUrl()}/checkout/resultado?reference=${encodeURIComponent(reference)}`
-    const amountInCents = Math.round(Number(checkoutContext.totalAmount || 0) * 100)
-    const integrity = createSha256Hash(`${reference}${amountInCents}COP${wompiIntegritySecret}`)
+    const notificationUrl = getMercadoPagoWebhookUrl()
     const whatsappUrl = buildCheckoutWhatsAppLink({
       reference,
       customer: checkoutContext.customer,
@@ -908,13 +902,34 @@ router.post(
       paymentMethod: 'online',
     })
 
+    let preferenceResult
+
+    try {
+      preferenceResult = await createMercadoPagoPreference({
+        reference,
+        items: checkoutContext.items,
+        customer: checkoutContext.customer,
+        shippingAmount: checkoutContext.shippingAmount,
+        totalAmount: checkoutContext.totalAmount,
+        redirectUrl,
+        notificationUrl,
+      })
+    } catch (error) {
+      console.error('Mercado Pago preference failed', error.payload || error)
+      throw createHttpError(502, error.message || 'No fue posible iniciar el pago en Mercado Pago')
+    }
+
+    if (!preferenceResult.checkoutUrl) {
+      throw createHttpError(502, 'Mercado Pago no devolvió una URL de pago')
+    }
+
     await CheckoutSession.findOneAndUpdate(
       { reference },
       {
         $set: {
           reference,
           status: 'pending',
-          paymentProvider: 'wompi',
+          paymentProvider: 'mercadopago',
           paymentMethod: 'online',
           customer: checkoutContext.customer,
           items: checkoutContext.items,
@@ -938,6 +953,7 @@ router.post(
           surchargeAmount: checkoutContext.surchargeAmount,
           totalAmount: checkoutContext.totalAmount,
           whatsappUrl,
+          mercadopagoPreferenceId: preferenceResult.preference.id || '',
         },
       },
       {
@@ -951,34 +967,8 @@ router.post(
     response.status(201).json({
       reference,
       redirectUrl,
-      amountInCents,
-      wompi: {
-        publicKey: wompiPublicKey,
-        currency: 'COP',
-        amountInCents,
-        reference,
-        redirectUrl,
-        signature: {
-          integrity,
-        },
-        customerData: {
-          email: checkoutContext.customer.email,
-          fullName: `${checkoutContext.customer.firstName} ${checkoutContext.customer.lastName}`.trim(),
-          phoneNumber: checkoutContext.customer.phone,
-          phoneNumberPrefix: checkoutContext.customer.phoneCountryCode,
-          legalId: checkoutContext.customer.documentNumber,
-          legalIdType: normalizeWompiLegalIdType(checkoutContext.customer.documentType),
-        },
-        shippingAddress: {
-          addressLine1: checkoutContext.customer.address,
-          addressLine2: checkoutContext.customer.neighborhood,
-          country: 'CO',
-          city: checkoutContext.customer.city,
-          region: checkoutContext.customer.state,
-          phoneNumber: normalizePhoneNumber(checkoutContext.customer.phoneCountryCode, checkoutContext.customer.phone),
-          name: `${checkoutContext.customer.firstName} ${checkoutContext.customer.lastName}`.trim(),
-        },
-      },
+      checkoutUrl: preferenceResult.checkoutUrl,
+      preferenceId: preferenceResult.preference.id || '',
     })
   }),
 )
@@ -997,8 +987,8 @@ router.get(
     response.json({
       reference: session.reference,
       status: session.status,
-      transactionStatus: session.wompiStatus || '',
-      transactionId: session.wompiTransactionId || '',
+      transactionStatus: session.mercadopagoStatus || session.wompiStatus || '',
+      transactionId: session.mercadopagoPaymentId || session.wompiTransactionId || '',
       whatsappUrl: session.whatsappUrl || '',
       orderReference: session.order?.reference || session.reference,
       totalAmount: Number(session.totalAmount || 0),
@@ -1006,6 +996,85 @@ router.get(
       failedAt: session.failedAt || null,
     })
   }),
+)
+
+async function applyMercadoPagoPaymentToSession(payment) {
+  const reference = String(payment?.external_reference || '').trim()
+  const paymentId = String(payment?.id || '').trim()
+
+  if (!reference || !paymentId) {
+    return
+  }
+
+  const session = await CheckoutSession.findOne({ reference })
+
+  if (!session) {
+    return
+  }
+
+  session.mercadopagoPaymentId = paymentId
+  session.mercadopagoStatus = String(payment.status || session.mercadopagoStatus || '')
+  session.mercadopagoMerchantOrderId = String(payment.order?.id || session.mercadopagoMerchantOrderId || '')
+
+  const mappedStatus = mapMercadoPagoPaymentStatus(payment.status)
+
+  if (mappedStatus === 'approved') {
+    await finalizeApprovedCheckoutSession(session)
+    return
+  }
+
+  if (!session.order) {
+    session.status = mappedStatus
+    session.failedAt = mappedStatus === 'pending' ? null : new Date()
+  }
+
+  await session.save()
+}
+
+async function handleMercadoPagoWebhook(request, response) {
+  const notification = parseMercadoPagoNotification(request)
+
+  if (!notification.id) {
+    response.status(200).json({ ok: true })
+    return
+  }
+
+  if (!verifyMercadoPagoWebhookSignature(request, notification.id)) {
+    console.warn('Invalid Mercado Pago webhook signature')
+    response.status(200).json({ ok: true })
+    return
+  }
+
+  try {
+    if (notification.type.includes('merchant_order')) {
+      const merchantOrder = await getMercadoPagoMerchantOrder(notification.id)
+      const payments = Array.isArray(merchantOrder?.payments) ? merchantOrder.payments : []
+      const approvedPayment = payments.find((payment) => String(payment.status || '').toLowerCase() === 'approved')
+      const paymentRef = approvedPayment || payments[0]
+
+      if (paymentRef?.id) {
+        const payment = await getMercadoPagoPayment(paymentRef.id)
+        await applyMercadoPagoPaymentToSession(payment)
+      }
+    } else {
+      const payment = await getMercadoPagoPayment(notification.id)
+      await applyMercadoPagoPaymentToSession(payment)
+    }
+  } catch (error) {
+    console.error('Mercado Pago webhook failed', error.payload || error)
+  }
+
+  response.status(200).json({ ok: true })
+}
+
+router.get(
+  '/checkout/online/mercadopago/webhook',
+  asyncHandler(handleMercadoPagoWebhook),
+)
+
+router.post(
+  '/checkout/online/mercadopago/webhook',
+  asyncHandler(handleMercadoPagoWebhook),
 )
 
 router.post(

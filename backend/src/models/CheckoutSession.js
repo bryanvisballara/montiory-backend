@@ -222,6 +222,28 @@ const checkoutSessionSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    mercadopagoPreferenceId: {
+      type: String,
+      default: '',
+      trim: true,
+      index: true,
+    },
+    mercadopagoPaymentId: {
+      type: String,
+      default: '',
+      trim: true,
+      index: true,
+    },
+    mercadopagoMerchantOrderId: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    mercadopagoStatus: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     order: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Order',
