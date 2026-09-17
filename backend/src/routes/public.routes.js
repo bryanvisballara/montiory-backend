@@ -10,6 +10,7 @@ import { notifyPartnerSale } from './partner.routes.js'
 import { notifyPaidOrder } from '../lib/order-notifications.js'
 import {
   createMercadoPagoPreference,
+  findMercadoPagoPaymentByReference,
   getMercadoPagoMerchantOrder,
   getMercadoPagoPayment,
   getMercadoPagoAccessToken,
@@ -350,6 +351,7 @@ async function buildCheckoutContext({ customer, items, shippingZone, coupon, pay
         unitPrice: Number(promotion.price),
         lineTotal: Number(promotion.price),
         decantSizeId: null,
+        promoItems,
         hasFreeShipping: promoItems.some((promoItem) => productHasFreeShipping(productMap.get(promoItem.productId))),
       }
     }
@@ -540,6 +542,7 @@ async function finalizeApprovedCheckoutSession(session) {
       quantity: Number(item.quantity || 0),
       unitPrice: Number(item.unitPrice || 0),
       lineTotal: Number(item.lineTotal || 0),
+      promoItems: Array.isArray(item.promoItems) ? item.promoItems : [],
     })),
     coupon: session.coupon?.id || null,
     couponName: session.coupon?.name || '',
@@ -722,7 +725,7 @@ router.post(
     const discountAmount = Number(request.body.discountAmount || 0)
     const surchargeAmount = Number(request.body.surchargeAmount || 0)
     const totalAmount = Number(request.body.totalAmount || 0)
-    const adminEmail = process.env.ADMIN_ORDER_EMAIL || process.env.ADMIN_EMAIL
+    const adminEmail = process.env.ADMIN_ORDER_EMAIL?.trim() || process.env.ADMIN_EMAIL?.trim() || 'orders@montiory.com'
     const normalizedItems = normalizeOrderItems(items)
     const partner = coupon?.id ? await findPartnerByCouponId(coupon.id) : null
     const partnerSaleData = buildPartnerSaleData({
@@ -976,13 +979,25 @@ router.post(
 router.get(
   '/checkout/online/session/:reference',
   asyncHandler(async (request, response) => {
-    const session = await CheckoutSession.findOne({ reference: request.params.reference })
-      .populate('order', 'reference totalAmount status')
-      .lean()
+    let session = await CheckoutSession.findOne({ reference: request.params.reference })
 
     if (!session) {
       throw createHttpError(404, 'No se encontró la sesión de pago')
     }
+
+    if (!session.order && session.paymentProvider === 'mercadopago') {
+      try {
+        const payment = await findMercadoPagoPaymentByReference(session.reference)
+        if (payment) {
+          await applyMercadoPagoPaymentToSession(payment)
+          session = await CheckoutSession.findOne({ reference: session.reference })
+        }
+      } catch (error) {
+        console.error('Mercado Pago session sync failed', error.payload || error)
+      }
+    }
+
+    await session.populate('order', 'reference totalAmount status')
 
     response.json({
       reference: session.reference,

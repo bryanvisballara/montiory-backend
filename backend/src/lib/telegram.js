@@ -50,9 +50,16 @@ export function buildPaidOrderTelegramMessage({
   ]
     .filter(Boolean)
     .join(', ')
-  const itemLines = (Array.isArray(items) ? items : []).map((item) => {
+  const itemLines = (Array.isArray(items) ? items : []).flatMap((item) => {
     const variant = item.variantLabel ? ` · ${item.variantLabel}` : ''
-    return `- ${item.name}${variant} x${item.quantity}`
+    const links = Array.isArray(item.productLinks) && item.productLinks.length
+      ? item.productLinks
+      : item.productUrl
+        ? [{ name: item.name, url: item.productUrl }]
+        : []
+    const linkLines = links.map((link) => (links.length > 1 ? `  ${link.name}: ${link.url}` : `  ${link.url}`))
+
+    return [`- ${item.name}${variant} x${item.quantity}`, ...linkLines]
   })
 
   return [

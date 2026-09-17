@@ -11,7 +11,17 @@ export function getMercadoPagoPublicKey() {
 }
 
 export function isMercadoPagoSandbox() {
-  return String(process.env.MERCADOPAGO_SANDBOX || 'true').trim().toLowerCase() !== 'false'
+  const accessToken = getMercadoPagoAccessToken()
+
+  if (accessToken.startsWith('TEST-')) {
+    return true
+  }
+
+  if (accessToken.startsWith('APP_USR-')) {
+    return false
+  }
+
+  return String(process.env.MERCADOPAGO_SANDBOX || '').trim().toLowerCase() === 'true'
 }
 
 export function getApiPublicBaseUrl() {
@@ -61,6 +71,11 @@ export function verifyMercadoPagoWebhookSignature(request, dataId) {
   }
 
   const signatureHeader = String(request.headers['x-signature'] || '')
+
+  if (!signatureHeader) {
+    return true
+  }
+
   const requestId = String(request.headers['x-request-id'] || '')
   const signatureParts = Object.fromEntries(
     signatureHeader
@@ -204,9 +219,7 @@ export async function createMercadoPagoPreference({
     },
   })
 
-  const checkoutUrl = isMercadoPagoSandbox()
-    ? preference.sandbox_init_point || preference.init_point
-    : preference.init_point || preference.sandbox_init_point
+  const checkoutUrl = preference.init_point || preference.sandbox_init_point
 
   return {
     preference,
@@ -216,6 +229,18 @@ export async function createMercadoPagoPreference({
 
 export async function getMercadoPagoPayment(paymentId) {
   return mercadoPagoRequest(`/v1/payments/${encodeURIComponent(paymentId)}`)
+}
+
+export async function findMercadoPagoPaymentByReference(reference) {
+  const payload = await mercadoPagoRequest(
+    `/v1/payments/search?sort=date_created&criteria=desc&external_reference=${encodeURIComponent(reference)}`,
+  )
+  const results = Array.isArray(payload?.results) ? payload.results : []
+  return (
+    results.find((payment) => String(payment.status || '').toLowerCase() === 'approved') ||
+    results[0] ||
+    null
+  )
 }
 
 export async function getMercadoPagoMerchantOrder(orderId) {

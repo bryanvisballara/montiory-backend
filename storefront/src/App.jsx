@@ -231,6 +231,10 @@ function getVisibleSizeOptions(product) {
     .filter((sizeOption) => sizeOption.label)
 }
 
+function getInStockSizeOptions(product) {
+  return getVisibleSizeOptions(product).filter((sizeOption) => sizeOption.stock > 0)
+}
+
 function productHasAnySelectedSizeInStock(product, selectedSizes) {
   if (!selectedSizes.length) {
     return true
@@ -246,7 +250,7 @@ function productHasAnySelectedSizeInStock(product, selectedSizes) {
 }
 
 function getComboSelectableSizes(product, selectedSizeFilters) {
-  const inStockSizes = getVisibleSizeOptions(product).filter((sizeOption) => sizeOption.stock > 0)
+  const inStockSizes = getInStockSizeOptions(product)
 
   if (!selectedSizeFilters.length) {
     return inStockSizes
@@ -934,7 +938,7 @@ function CheckoutPage({
                 disabled={isSubmitting || isPayingOnline || !items.length}
                 onClick={onPayOnline}
               >
-                {isPayingOnline ? 'Redirigiendo a Mercado Pago...' : 'Pagar en línea'}
+                {isPayingOnline ? 'Redirigiendo a Mercado Pago...' : 'Pagar en línea (sin intermediarios)'}
               </button>
             </div>
           </form>
@@ -1380,6 +1384,7 @@ function ProductDetailView({
   const [sizeError, setSizeError] = useState('')
   const productDescription = product.description || 'Una selección original con presencia elegante y salida memorable para quienes buscan una firma olfativa distinta.'
   const sizeOptions = getVisibleSizeOptions(product)
+  const displaySizeOptions = getInStockSizeOptions(product)
   const selectableComboSizes = getComboSelectableSizes(product, selectedSizeFilters)
   const availableStock = sizeOptions.length
     ? sizeOptions.reduce((totalStock, sizeOption) => totalStock + sizeOption.stock, 0)
@@ -1398,7 +1403,13 @@ function ProductDetailView({
       return null
     }
 
-    const allowedSizes = comboMode ? selectableComboSizes : sizeOptions
+    const allowedSizes = comboMode ? selectableComboSizes : displaySizeOptions
+
+    if (!allowedSizes.length) {
+      setSizeError(comboMode ? 'No hay tallas en stock para este combo.' : 'Esta prenda no tiene tallas en stock.')
+      return undefined
+    }
+
     const selectedSize = allowedSizes.find((sizeOption) => sizeOption.label === selectedSizeLabel)
 
     if (!selectedSize) {
@@ -1459,11 +1470,11 @@ function ProductDetailView({
             <strong>{availableStock > 0 ? 'En stock' : 'Bajo pedido'}</strong>
           </div>
 
-          {sizeOptions.length ? (
+          {displaySizeOptions.length ? (
             <div className="detail-size-stock">
               <span>{comboMode ? 'Tallas disponibles para el combo' : 'Elige tu talla'}</span>
               <div className="detail-size-stock__grid">
-                {sizeOptions.map((sizeOption) => {
+                {displaySizeOptions.map((sizeOption) => {
                   const isSelected = selectedSizeLabel === sizeOption.label
                   const isEmpty = sizeOption.stock <= 0
                   const matchesFilter = !selectedSizeFilters.length || selectedSizeFilters.some((label) => label.toUpperCase() === sizeOption.label.toUpperCase())
@@ -1486,13 +1497,15 @@ function ProductDetailView({
                       }}
                     >
                       <strong>{sizeOption.label}</strong>
-                      <small>{isEmpty ? 'Agotada' : matchesFilter || !comboMode ? `${sizeOption.stock} und` : 'Otra talla'}</small>
+                      {comboMode && !matchesFilter ? <small>Otra talla</small> : null}
                     </button>
                   )
                 })}
               </div>
               {sizeError ? <p className="detail-size-stock__error">{sizeError}</p> : null}
             </div>
+          ) : sizeOptions.length ? (
+            <p className="detail-size-stock__error">Sin tallas en stock.</p>
           ) : null}
 
           <div className="detail-price">
@@ -1837,7 +1850,8 @@ function ComboProductCard({
   onAddToCombo,
 }) {
   const ratingData = getProductRatingData(product)
-  const sizeOptions = getVisibleSizeOptions(product)
+  const allSizeOptions = getVisibleSizeOptions(product)
+  const sizeOptions = getInStockSizeOptions(product)
   const selectableSizes = getComboSelectableSizes(product, selectedSizeFilters)
   const [selectedSizeLabel, setSelectedSizeLabel] = useState(selectableSizes.length === 1 ? selectableSizes[0].label : '')
   const [sizeError, setSizeError] = useState('')
@@ -1849,6 +1863,11 @@ function ComboProductCard({
 
   function handleAddToCombo() {
     if (isComboFull) {
+      return
+    }
+
+    if (allSizeOptions.length && !sizeOptions.length) {
+      setSizeError('Sin tallas en stock.')
       return
     }
 
@@ -1887,7 +1906,6 @@ function ComboProductCard({
             <span>Tallas disponibles</span>
             <div className="combo-card-sizes__row">
               {sizeOptions.map((sizeOption) => {
-                const isEmpty = sizeOption.stock <= 0
                 const isSelectable = selectableSizes.some((item) => item.label === sizeOption.label)
                 const isSelected = selectedSizeLabel === sizeOption.label
 
@@ -1897,7 +1915,6 @@ function ComboProductCard({
                     type="button"
                     className={[
                       'combo-card-sizes__item',
-                      isEmpty ? 'combo-card-sizes__item--empty' : '',
                       isSelectable ? 'combo-card-sizes__item--available' : '',
                       isSelected ? 'combo-card-sizes__item--selected' : '',
                     ].filter(Boolean).join(' ')}
@@ -1908,20 +1925,22 @@ function ComboProductCard({
                     }}
                   >
                     <strong>{sizeOption.label}</strong>
-                    <small>{isEmpty ? 'Agotada' : isSelectable ? 'Disponible' : 'Otra talla'}</small>
+                    <small>{isSelectable ? 'Disponible' : 'Otra talla'}</small>
                   </button>
                 )
               })}
             </div>
             {sizeError ? <p className="combo-card-sizes__error">{sizeError}</p> : null}
           </div>
+        ) : allSizeOptions.length ? (
+          <p className="combo-card-sizes__hint">Sin tallas en stock.</p>
         ) : (
           <p className="combo-card-sizes__hint">Talla única. Puedes agregarla al combo.</p>
         )}
         <button
           type="button"
           className="button-primary combo-card-add"
-          disabled={isComboFull}
+          disabled={isComboFull || Boolean(allSizeOptions.length && !sizeOptions.length)}
           onClick={handleAddToCombo}
         >
           {isComboFull ? 'Combo completo' : 'Agregar al combo'}
@@ -1931,7 +1950,7 @@ function ComboProductCard({
   )
 }
 
-function PromoComboBar({ promo, selections, onRemoveSelection, onAddToCart, onCancel }) {
+function PromoComboBar({ promo, selections, onRemoveSelection, onAddToCart, onPayNow, onCancel }) {
   const remaining = Math.max(0, promo.itemCount - selections.length)
   const isComplete = remaining === 0
 
@@ -1968,8 +1987,11 @@ function PromoComboBar({ promo, selections, onRemoveSelection, onAddToCart, onCa
         <button type="button" className="button-secondary" onClick={onCancel}>
           Cancelar
         </button>
-        <button type="button" className="button-primary" disabled={!isComplete} onClick={onAddToCart}>
+        <button type="button" className="button-secondary" disabled={!isComplete} onClick={onAddToCart}>
           Agregar combo al carrito
+        </button>
+        <button type="button" className="button-primary" disabled={!isComplete} onClick={onPayNow}>
+          Ir a pagar
         </button>
       </div>
     </div>
@@ -2366,10 +2388,14 @@ function App() {
       return
     }
 
-    const sizeOptions = getVisibleSizeOptions(product)
+    const inStockSizes = getInStockSizeOptions(product)
 
-    if (sizeOptions.length && !variant?.sizeLabel) {
+    if (inStockSizes.length && !variant?.sizeLabel) {
       handleOpenQuickView(product)
+      return
+    }
+
+    if (getVisibleSizeOptions(product).length && !inStockSizes.length) {
       return
     }
 
@@ -2400,9 +2426,9 @@ function App() {
     }
   }
 
-  function handleAddPromoComboToCart() {
+  function addPromoComboToCart() {
     if (!selectedPromo || draftPromoSelections.length !== selectedPromo.itemCount) {
-      return
+      return false
     }
 
     const comboKey = `promo:${selectedPromo._id}:${Date.now()}`
@@ -2416,9 +2442,33 @@ function App() {
       },
     }))
     setDraftPromoSelections([])
+    return true
+  }
+
+  function handleAddPromoComboToCart() {
+    if (!addPromoComboToCart()) {
+      return
+    }
+
     setConfirmationProductName(`Combo ${selectedPromo.itemCount} prendas`)
     setConfirmationMessage(`Combo ${selectedPromo.itemCount} prendas ya está en tu carrito.`)
     showConfirmation()
+  }
+
+  function handlePayPromoCombo() {
+    if (!addPromoComboToCart()) {
+      return
+    }
+
+    window.history.pushState({}, '', '/checkout')
+    setRouteProductId('')
+    setIsCartRoute(false)
+    setIsCheckoutRoute(true)
+    setIsCheckoutResultRoute(false)
+    setIsCartSidebarOpen(false)
+    setQuickViewProduct(null)
+    setPurchaseMessage('')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function handleDecantQuantityChange(quantityKey, nextQuantity) {
@@ -2991,6 +3041,7 @@ function App() {
                   setDraftPromoSelections((current) => current.filter((_selection, currentIndex) => currentIndex !== index))
                 }}
                 onAddToCart={handleAddPromoComboToCart}
+                onPayNow={handlePayPromoCombo}
                 onCancel={handleClearPromo}
               />
             ) : null}
@@ -3017,7 +3068,7 @@ function App() {
                     }
 
                     const ratingData = getProductRatingData(product)
-                    const sizeOptions = getVisibleSizeOptions(product)
+                    const sizeOptions = getInStockSizeOptions(product)
                     const displayPrices = getProductDisplayPrices(product)
                     const visibleDecantPrices = getVisibleDecantPrices(product, payload.decantSettings)
                     const isDecantView = activeCategory === 'decants'
@@ -3040,8 +3091,12 @@ function App() {
                             name={product.name}
                             onImageClick={() => handleOpenProduct(product)}
                             onAddToCart={() => {
-                              if (sizeOptions.length) {
+                              if (getInStockSizeOptions(product).length) {
                                 handleOpenQuickView(product)
+                                return
+                              }
+
+                              if (getVisibleSizeOptions(product).length) {
                                 return
                               }
 

@@ -1,5 +1,6 @@
 import { sendBrevoEmail } from './brevo.js'
 import { buildAdminOrderNotificationEmail, buildOrderPlacedEmail } from './email-templates.js'
+import { getItemProductLinks } from './storefront-urls.js'
 import { buildPaidOrderTelegramMessage, sendTelegramMessage } from './telegram.js'
 
 function formatCurrency(value) {
@@ -11,20 +12,37 @@ function formatCurrency(value) {
 }
 
 function getAdminOrderEmail() {
-  return process.env.ADMIN_ORDER_EMAIL?.trim() || process.env.ADMIN_EMAIL?.trim() || 'order@montiory.com'
+  return process.env.ADMIN_ORDER_EMAIL?.trim() || process.env.ADMIN_EMAIL?.trim() || 'orders@montiory.com'
 }
 
 function formatOrderItems(items = []) {
-  return items.map((item) => ({
-    ...item,
-    unitPriceLabel: formatCurrency(item.unitPrice),
-    lineTotalLabel: formatCurrency(item.lineTotal),
-  }))
+  return items.map((item) => {
+    const productLinks = getItemProductLinks(item)
+
+    return {
+      ...item,
+      unitPriceLabel: formatCurrency(item.unitPrice),
+      lineTotalLabel: formatCurrency(item.lineTotal),
+      productUrl: productLinks[0]?.url || '',
+      productLinks,
+    }
+  })
 }
 
 export async function notifyPaidOrder({ order, customer, session }) {
   const reference = order.reference
-  const items = formatOrderItems(order.items)
+  const items = formatOrderItems(
+    (order.items || []).map((item, index) => {
+      const plain = typeof item.toObject === 'function' ? item.toObject() : item
+      const sessionItem = session.items?.[index] || {}
+
+      return {
+        ...plain,
+        promoItems: plain.promoItems?.length ? plain.promoItems : sessionItem.promoItems || [],
+        product: plain.product || sessionItem.product || null,
+      }
+    }),
+  )
   const shippingZone = {
     place: session.shippingZone?.place || order.shippingPlace || '',
     eta: session.shippingZone?.eta || order.shippingEta || '',
@@ -58,7 +76,7 @@ export async function notifyPaidOrder({ order, customer, session }) {
       htmlContent: buildOrderPlacedEmail({
         customerName: customerPayload.firstName,
         orderReference: reference,
-        items: order.items,
+        items,
         totalAmount: order.totalAmount,
         shippingPlace: shippingZone.place,
         shippingPrice: shippingZone.price,
@@ -94,7 +112,7 @@ export async function notifyPaidOrder({ order, customer, session }) {
       buildPaidOrderTelegramMessage({
         reference,
         customer: customerPayload,
-        items: order.items,
+        items,
         shippingZone,
         couponName,
         totalAmount: totalAmountLabel,

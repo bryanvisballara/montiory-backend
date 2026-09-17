@@ -32,6 +32,27 @@ const orderItemSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    promoItems: {
+      type: [
+        {
+          productId: {
+            type: mongoose.Schema.Types.ObjectId,
+            default: null,
+          },
+          name: {
+            type: String,
+            default: '',
+            trim: true,
+          },
+          sizeLabel: {
+            type: String,
+            default: '',
+            trim: true,
+          },
+        },
+      ],
+      default: [],
+    },
   },
   { _id: true },
 )

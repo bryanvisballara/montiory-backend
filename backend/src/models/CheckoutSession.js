@@ -36,6 +36,27 @@ const checkoutSessionItemSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       default: null,
     },
+    promoItems: {
+      type: [
+        {
+          productId: {
+            type: mongoose.Schema.Types.ObjectId,
+            default: null,
+          },
+          name: {
+            type: String,
+            default: '',
+            trim: true,
+          },
+          sizeLabel: {
+            type: String,
+            default: '',
+            trim: true,
+          },
+        },
+      ],
+      default: [],
+    },
   },
   { _id: true },
 )

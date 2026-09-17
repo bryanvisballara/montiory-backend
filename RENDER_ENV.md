@@ -8,7 +8,7 @@ MONGODB_URI=<uri_del_cluster_del_proyecto_montiory>
 MONGODB_DB=montiory
 JWT_SECRET=<un_secreto_largo_y_privado>
 ADMIN_EMAIL=admin@montiory.com
-ADMIN_ORDER_EMAIL=order@montiory.com
+ADMIN_ORDER_EMAIL=orders@montiory.com
 ADMIN_PASSWORD=112233
 OPERATOR_EMAIL=andrisfontalvo9@gmail.com
 OPERATOR_PASSWORD=010203
@@ -30,7 +30,7 @@ WOMPI_INTEGRITY_SECRET=<tu_event_integrity_secret>
 WOMPI_EVENTS_SECRET=<tu_events_secret>
 MERCADOPAGO_PUBLIC_KEY=<public_key_de_mercadopago>
 MERCADOPAGO_ACCESS_TOKEN=<access_token_de_mercadopago>
-MERCADOPAGO_SANDBOX=true
+MERCADOPAGO_SANDBOX=false
 MERCADOPAGO_WEBHOOK_SECRET=<clave_secreta_del_webhook>
 API_PUBLIC_URL=https://montiory-backend.onrender.com
 TELEGRAM_BOT_TOKEN=<token_del_bot_de_telegram>
@@ -52,7 +52,7 @@ Notas
 - `ADMIN_EMAIL` y `ADMIN_PASSWORD` corresponden al seed inicial del login administrativo.
 - `OPERATOR_EMAIL` y `OPERATOR_PASSWORD` crean o actualizan el usuario operario con acceso a ordenes, preordenes, marketing y cupones.
 - `PARTNER_NAME`, `PARTNER_EMAIL` y `PARTNER_PASSWORD` crean o actualizan un embajador de prueba para entrar por el mismo login page del portal.
-- `ADMIN_ORDER_EMAIL=order@montiory.com` recibe la confirmacion de orden pagada con los datos de despacho. Si no existe, se usa `ADMIN_EMAIL`.
+- `ADMIN_ORDER_EMAIL=orders@montiory.com` recibe la confirmacion de orden pagada con los datos de despacho. Si no existe, se usa `ADMIN_EMAIL`.
 - El cliente recibe un correo de compra exitosa cuando Mercado Pago confirma el pago.
 - `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID` envian el mismo pedido pagado al bot de Telegram. El bot se crea con @BotFather; el chat id se obtiene con `node scripts/telegram-setup.js`.
 - `JWT_SECRET` debe cambiarse por un valor largo y privado antes de produccion real.

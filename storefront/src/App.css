@@ -1953,6 +1953,7 @@
 .promo-combo-bar__actions .button-secondary {
   position: relative;
   flex: 0 1 auto;
+  white-space: nowrap;
 }
 
 .cart-item__combo-qty {
