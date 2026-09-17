@@ -257,6 +257,10 @@ function getInStockSizeOptions(product) {
   return getVisibleSizeOptions(product).filter((sizeOption) => sizeOption.stock > 0)
 }
 
+function productHasPurchasableSizes(product) {
+  return getInStockSizeOptions(product).length > 0
+}
+
 function productHasAnySelectedSizeInStock(product, selectedSizes) {
   if (!selectedSizes.length) {
     return true
@@ -627,15 +631,17 @@ function ProductCarousel({ images, name, onImageClick, onAddToCart, onQuickView,
       )}
       {showOverlayActions ? (
         <div className="product-hover-actions">
-          <button
-            type="button"
-            className="product-hover-actions__button"
-            onClick={onAddToCart}
-            aria-label={`Agregar ${name} al carrito`}
-            title="Agregar al carrito"
-          >
-            <CartIcon />
-          </button>
+          {onAddToCart ? (
+            <button
+              type="button"
+              className="product-hover-actions__button"
+              onClick={onAddToCart}
+              aria-label={`Agregar ${name} al carrito`}
+              title="Agregar al carrito"
+            >
+              <CartIcon />
+            </button>
+          ) : null}
           <button
             type="button"
             className="product-hover-actions__button"
@@ -1405,12 +1411,9 @@ function ProductDetailView({
   const [selectedSizeLabel, setSelectedSizeLabel] = useState('')
   const [sizeError, setSizeError] = useState('')
   const productDescription = product.description || 'Una selección original con presencia elegante y salida memorable para quienes buscan una firma olfativa distinta.'
-  const sizeOptions = getVisibleSizeOptions(product)
   const displaySizeOptions = getInStockSizeOptions(product)
   const selectableComboSizes = getComboSelectableSizes(product, selectedSizeFilters)
-  const availableStock = sizeOptions.length
-    ? sizeOptions.reduce((totalStock, sizeOption) => totalStock + sizeOption.stock, 0)
-    : Number(product.stock || 0)
+  const canPurchase = comboMode ? selectableComboSizes.length > 0 : displaySizeOptions.length > 0
 
   useEffect(() => {
     const defaultSize = comboMode && selectableComboSizes.length === 1
@@ -1421,10 +1424,6 @@ function ProductDetailView({
   }, [product._id, comboMode, selectedSizeFilters.join('|')])
 
   function resolveSizeVariant() {
-    if (!sizeOptions.length) {
-      return null
-    }
-
     const allowedSizes = comboMode ? selectableComboSizes : displaySizeOptions
 
     if (!allowedSizes.length) {
@@ -1489,7 +1488,7 @@ function ProductDetailView({
 
           <div className="detail-panel__stock">
             <span>Disponibilidad</span>
-            <strong>{availableStock > 0 ? 'En stock' : 'Bajo pedido'}</strong>
+            <strong>{canPurchase ? 'En stock' : 'Agotado'}</strong>
           </div>
 
           {displaySizeOptions.length ? (
@@ -1526,9 +1525,11 @@ function ProductDetailView({
               </div>
               {sizeError ? <p className="detail-size-stock__error">{sizeError}</p> : null}
             </div>
-          ) : sizeOptions.length ? (
-            <p className="detail-size-stock__error">Sin tallas en stock.</p>
-          ) : null}
+          ) : (
+            <p className="detail-size-stock__error">
+              {comboMode ? 'No hay tallas en stock para este combo.' : 'Sin tallas en stock. Esta prenda no se puede comprar.'}
+            </p>
+          )}
 
           <div className="detail-price">
             {displayPrices.compareAtPrice != null ? <span>{formatCurrency(displayPrices.compareAtPrice)}</span> : null}
@@ -1551,17 +1552,18 @@ function ProductDetailView({
 
           <div className="detail-actions">
             {comboMode ? (
-              <button type="button" className="button-primary detail-action" onClick={handleAddToCartClick}>
+              <button type="button" className="button-primary detail-action" disabled={!canPurchase} onClick={handleAddToCartClick}>
                 Agregar al combo
               </button>
             ) : (
               <>
-                <button type="button" className="button-secondary detail-action" onClick={handleAddToCartClick}>
+                <button type="button" className="button-secondary detail-action" disabled={!canPurchase} onClick={handleAddToCartClick}>
                   Agregar al carrito
                 </button>
                 <button
                   type="button"
                   className="button-primary detail-action"
+                  disabled={!canPurchase}
                   onClick={handleBuyNowClick}
                 >
                   Comprar ahora
@@ -1872,7 +1874,6 @@ function ComboProductCard({
   onAddToCombo,
 }) {
   const ratingData = getProductRatingData(product)
-  const allSizeOptions = getVisibleSizeOptions(product)
   const sizeOptions = getInStockSizeOptions(product)
   const selectableSizes = getComboSelectableSizes(product, selectedSizeFilters)
   const [selectedSizeLabel, setSelectedSizeLabel] = useState(selectableSizes.length === 1 ? selectableSizes[0].label : '')
@@ -1888,17 +1889,17 @@ function ComboProductCard({
       return
     }
 
-    if (allSizeOptions.length && !sizeOptions.length) {
+    if (!sizeOptions.length) {
       setSizeError('Sin tallas en stock.')
       return
     }
 
-    if (selectableSizes.length && !selectedSizeLabel) {
+    if (!selectedSizeLabel) {
       setSizeError('Selecciona una talla para agregar.')
       return
     }
 
-    onAddToCombo(product, selectedSizeLabel ? { kind: 'size', sizeLabel: selectedSizeLabel } : null)
+    onAddToCombo(product, { kind: 'size', sizeLabel: selectedSizeLabel })
   }
 
   return (
@@ -1954,15 +1955,13 @@ function ComboProductCard({
             </div>
             {sizeError ? <p className="combo-card-sizes__error">{sizeError}</p> : null}
           </div>
-        ) : allSizeOptions.length ? (
-          <p className="combo-card-sizes__hint">Sin tallas en stock.</p>
         ) : (
-          <p className="combo-card-sizes__hint">Talla única. Puedes agregarla al combo.</p>
+          <p className="combo-card-sizes__hint">Sin tallas en stock.</p>
         )}
         <button
           type="button"
           className="button-primary combo-card-add"
-          disabled={isComboFull || Boolean(allSizeOptions.length && !sizeOptions.length)}
+          disabled={isComboFull || !sizeOptions.length}
           onClick={handleAddToCombo}
         >
           {isComboFull ? 'Combo completo' : 'Agregar al combo'}
@@ -2171,6 +2170,10 @@ function App() {
               return null
             }
 
+            if (entry.selections.some((selection) => !selection.sizeLabel)) {
+              return null
+            }
+
             return {
               cartKey,
               product: firstProduct,
@@ -2198,6 +2201,10 @@ function App() {
 
           const isDecantVariant = entry.variant?.kind === 'decant'
           const isSizeVariant = entry.variant?.kind === 'size' && Boolean(entry.variant.sizeLabel)
+
+          if (!isDecantVariant && !isSizeVariant) {
+            return null
+          }
           const displayPrices = getProductDisplayPrices(product)
           const unitPrice = Number(isDecantVariant ? entry.variant.unitPrice : displayPrices.salePrice || 0)
           const baseUnitPrice = Number(isDecantVariant ? entry.variant.unitPrice : displayPrices.compareAtPrice || displayPrices.salePrice || 0)
@@ -2375,6 +2382,13 @@ function App() {
       return
     }
 
+    if (variant?.kind !== 'decant' && !variant?.sizeLabel) {
+      if (productHasPurchasableSizes(product)) {
+        handleOpenQuickView(product)
+      }
+      return
+    }
+
     handleAddToCart(product._id, quantity, variant)
     setConfirmationProductName(variant?.sizeLabel ? buildDecantDisplayName(product.name, variant.sizeLabel) : product.name)
     setConfirmationMessage('')
@@ -2408,12 +2422,12 @@ function App() {
 
     const inStockSizes = getInStockSizeOptions(product)
 
-    if (inStockSizes.length && !variant?.sizeLabel) {
-      handleOpenQuickView(product)
+    if (!inStockSizes.length) {
       return
     }
 
-    if (getVisibleSizeOptions(product).length && !inStockSizes.length) {
+    if (!variant?.sizeLabel) {
+      handleOpenQuickView(product)
       return
     }
 
@@ -2542,6 +2556,13 @@ function App() {
   function handleBuyNow(product, variant = null) {
     if (selectedPromo) {
       handleAddToPromoCombo(product, variant)
+      return
+    }
+
+    if (variant?.kind !== 'decant' && !variant?.sizeLabel) {
+      if (productHasPurchasableSizes(product)) {
+        handleOpenQuickView(product)
+      }
       return
     }
 
@@ -3108,18 +3129,7 @@ function App() {
                             images={product.imageUrls || []}
                             name={product.name}
                             onImageClick={() => handleOpenProduct(product)}
-                            onAddToCart={() => {
-                              if (getInStockSizeOptions(product).length) {
-                                handleOpenQuickView(product)
-                                return
-                              }
-
-                              if (getVisibleSizeOptions(product).length) {
-                                return
-                              }
-
-                              handleAddToCartWithConfirmation(product, 1)
-                            }}
+                            onAddToCart={productHasPurchasableSizes(product) ? () => handleOpenQuickView(product) : undefined}
                             onQuickView={() => handleOpenQuickView(product)}
                             showOverlayActions={!isDecantView}
                           />

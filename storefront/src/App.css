@@ -1372,6 +1372,15 @@
   padding: 12px 16px;
 }
 
+.button-primary:disabled,
+.button-secondary:disabled,
+.detail-action:disabled,
+.combo-card-add:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .detail-delivery {
   margin: 0;
   color: var(--text-muted);

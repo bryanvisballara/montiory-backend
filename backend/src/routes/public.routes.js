@@ -324,19 +324,18 @@ async function buildCheckoutContext({ customer, items, shippingZone, coupon, pay
         }
 
         const sizeOptions = Array.isArray(promoProduct.sizeOptions) ? promoProduct.sizeOptions : []
+        const inStockSizes = sizeOptions.filter((sizeOption) => Number(sizeOption.stock || 0) > 0 && String(sizeOption.label || '').trim())
 
-        if (sizeOptions.length) {
-          const matchingSize = sizeOptions.find(
-            (sizeOption) => String(sizeOption.label || '').trim() === promoItem.sizeLabel,
-          )
+        if (!inStockSizes.length) {
+          throw createHttpError(400, `${promoProduct.name} no tiene tallas en stock`)
+        }
 
-          if (!matchingSize) {
-            throw createHttpError(400, `Selecciona una talla para ${promoProduct.name}`)
-          }
+        const matchingSize = inStockSizes.find(
+          (sizeOption) => String(sizeOption.label || '').trim() === promoItem.sizeLabel,
+        )
 
-          if (Number(matchingSize.stock || 0) < 1) {
-            throw createHttpError(400, `No hay suficiente stock de ${promoProduct.name} en talla ${promoItem.sizeLabel}`)
-          }
+        if (!matchingSize) {
+          throw createHttpError(400, `Selecciona una talla para ${promoProduct.name}`)
         }
       })
 
@@ -361,9 +360,17 @@ async function buildCheckoutContext({ customer, items, shippingZone, coupon, pay
     let decantSizeId = null
     const sizeOptions = Array.isArray(product.sizeOptions) ? product.sizeOptions : []
 
-    if (sizeOptions.length && !item.decantSizeId) {
-      const matchingSize = sizeOptions.find(
-        (sizeOption) => String(sizeOption.label || '').trim() === variantLabel,
+    if (!item.decantSizeId) {
+      const inStockSizes = sizeOptions.filter(
+        (sizeOption) => Number(sizeOption.stock || 0) > 0 && String(sizeOption.label || '').trim(),
+      )
+
+      if (!inStockSizes.length) {
+        throw createHttpError(400, `${product.name} no tiene tallas en stock`)
+      }
+
+      const matchingSize = inStockSizes.find(
+        (sizeOption) => String(sizeOption.label || '').trim() === String(variantLabel || '').trim(),
       )
 
       if (!matchingSize) {
