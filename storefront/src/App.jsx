@@ -5,7 +5,7 @@ import './App.css'
 const isLocalHost = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
 const apiBaseUrl = import.meta.env.VITE_API_URL || (isLocalHost ? 'http://localhost:10000/api' : 'https://montiory-backend.onrender.com/api')
 const brandLockupUrl = `${import.meta.env.BASE_URL}montiory-logo-header.png`
-const brandCollectionFallbackUrl = `${import.meta.env.BASE_URL}montiory-logo-principal.png`
+const brandCollectionFallbackUrl = `${import.meta.env.BASE_URL}seasonal-welcome.jpg`
 const defaultSeasonalWelcomeImageUrl = `${import.meta.env.BASE_URL}seasonal-welcome.jpg`
 
 function buildSeasonalWelcomeConfig(apiConfig) {
@@ -600,11 +600,13 @@ function CollectionCard({ chip, imageUrl, isActive, onClick, index }) {
       type="button"
       className={isActive ? 'collection-card collection-card--active' : 'collection-card'}
       onClick={onClick}
-      style={{ '--enter-delay': `${index * 90}ms` }}
+      style={{
+        '--enter-delay': `${index * 90}ms`,
+        backgroundImage: `url(${imageUrl})`,
+      }}
       aria-pressed={isActive}
       aria-label={`Ver colección ${chip.label}`}
     >
-      <img src={imageUrl} alt="" className="collection-card__image" loading="lazy" />
       <span className="collection-card__overlay" aria-hidden="true" />
       <span className="collection-card__title">{chip.label}</span>
       {chip.hasFreeShipping ? (
@@ -637,7 +639,7 @@ function SeasonalWelcomeModal({ modalState, config, onDismiss, onViewPromotions 
           ×
         </button>
         <div className="seasonal-welcome-modal__media">
-          <img src={config.imageUrl} alt="" decoding="async" />
+          <img src={config.imageUrl} alt="" decoding="async" width={900} height={600} />
           {config.mediaBadge ? <span className="seasonal-welcome-modal__media-badge">{config.mediaBadge}</span> : null}
         </div>
         <div className="seasonal-welcome-modal__content">
@@ -3258,7 +3260,7 @@ function App() {
           />
         ) : (
           <>
-            <div className="category-ribbon" aria-label="Categorías del catálogo">
+            <div className={`category-ribbon${isLoading ? ' category-ribbon--pending' : ''}`} aria-label="Categorías del catálogo">
               <div className="category-ribbon__intro">
                 <span>Colecciones</span>
               </div>
