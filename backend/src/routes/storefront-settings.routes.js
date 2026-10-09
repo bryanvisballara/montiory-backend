@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { asyncHandler } from '../lib/async-handler.js'
 import { normalizeChipOrder } from '../lib/chip-order.js'
+import { normalizeSeasonalWelcome } from '../lib/seasonal-welcome.js'
 import { requireAuth, requireRole } from '../middleware/auth.js'
 import Category from '../models/Category.js'
 import DecantSettings from '../models/DecantSettings.js'
@@ -23,33 +24,42 @@ async function getNormalizedChipOrder(chipOrder) {
   )
 }
 
+function buildSettingsResponse(settings, chipOrder) {
+  return {
+    key: 'default',
+    chipOrder,
+    seasonalWelcome: normalizeSeasonalWelcome(settings?.seasonalWelcome),
+  }
+}
+
 router.get(
   '/',
   asyncHandler(async (_request, response) => {
     const settings = await StorefrontSettings.findOne({ key: 'default' }).lean()
     const chipOrder = await getNormalizedChipOrder(settings?.chipOrder)
 
-    response.json({
-      key: 'default',
-      chipOrder,
-    })
+    response.json(buildSettingsResponse(settings, chipOrder))
   }),
 )
 
 router.put(
   '/',
   asyncHandler(async (request, response) => {
-    const chipOrder = await getNormalizedChipOrder(request.body?.chipOrder)
+    const existing = await StorefrontSettings.findOne({ key: 'default' }).lean()
+    const chipOrder = await getNormalizedChipOrder(
+      request.body?.chipOrder !== undefined ? request.body.chipOrder : existing?.chipOrder,
+    )
+    const seasonalWelcome = normalizeSeasonalWelcome(
+      request.body?.seasonalWelcome !== undefined ? request.body.seasonalWelcome : existing?.seasonalWelcome,
+    )
+
     const settings = await StorefrontSettings.findOneAndUpdate(
       { key: 'default' },
-      { $set: { chipOrder } },
+      { $set: { chipOrder, seasonalWelcome } },
       { new: true, upsert: true },
     ).lean()
 
-    response.json({
-      key: 'default',
-      chipOrder: settings.chipOrder,
-    })
+    response.json(buildSettingsResponse(settings, chipOrder))
   }),
 )
 

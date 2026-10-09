@@ -47,6 +47,7 @@ router.post(
       ? request.body.description.replace(/\r\n?/g, '\n')
       : ''
     const hasFreeShipping = Boolean(request.body.hasFreeShipping)
+    const imageUrl = String(request.body.imageUrl || '').trim()
 
     if (!name) {
       throw createHttpError(400, 'Category name is required')
@@ -60,6 +61,7 @@ router.post(
       description,
       sortOrder: nextSortOrder,
       hasFreeShipping,
+      imageUrl,
     })
 
     const settings = await StorefrontSettings.findOne({ key: 'default' }).lean()
@@ -139,6 +141,7 @@ router.put(
       ? request.body.description.replace(/\r\n?/g, '\n')
       : ''
     const hasFreeShipping = Boolean(request.body.hasFreeShipping)
+    const imageUrl = String(request.body.imageUrl || '').trim()
 
     if (!name) {
       throw createHttpError(400, 'Category name is required')
@@ -146,7 +149,7 @@ router.put(
 
     const category = await Category.findByIdAndUpdate(
       request.params.id,
-      { name, description, hasFreeShipping },
+      { name, description, hasFreeShipping, imageUrl },
       { new: true, runValidators: true },
     )
 

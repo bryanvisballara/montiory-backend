@@ -14,6 +14,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import './App.css'
+import './category-image-field.css'
 
 const isLocalHost = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
 const apiBaseUrl = import.meta.env.VITE_API_URL || (isLocalHost ? 'http://localhost:10000/api' : 'https://montiory-backend.onrender.com/api')
@@ -23,7 +24,19 @@ const adminBasePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '')
 const adminHomePath = adminBasePath ? `${adminBasePath}/` : '/'
 const adminLoginPath = adminBasePath ? `${adminBasePath}/login` : '/login'
 
-const emptyCategoryForm = { name: '', description: '', hasFreeShipping: false }
+const emptyCategoryForm = { name: '', description: '', hasFreeShipping: false, imageUrl: '' }
+const emptySeasonalWelcomeForm = {
+  enabled: true,
+  version: '1',
+  imageUrl: '',
+  mediaBadge: 'Edición limitada',
+  eyebrow: 'Temporada Montiory',
+  title: 'Aprovecha las promociones de temporada',
+  description:
+    'Combos especiales, precios preferenciales y piezas seleccionadas para renovar tu guardarropa con elegancia.',
+  primaryCta: 'Ver promociones',
+  secondaryCta: 'Seguir explorando',
+}
 const emptyDecantSettings = { key: 'default', sortOrder: 999, isEnabled: false, sizes: [] }
 const emptyProductForm = {
   name: '',
@@ -558,6 +571,8 @@ function App() {
   const [coupons, setCoupons] = useState([])
   const [promotions, setPromotions] = useState([])
   const [chipOrder, setChipOrder] = useState([])
+  const [seasonalWelcomeForm, setSeasonalWelcomeForm] = useState(emptySeasonalWelcomeForm)
+  const [isSavingSeasonalWelcome, setIsSavingSeasonalWelcome] = useState(false)
   const [promotionForm, setPromotionForm] = useState(emptyPromotionForm)
   const [categoryForm, setCategoryForm] = useState(emptyCategoryForm)
   const [productForm, setProductForm] = useState(emptyProductForm)
@@ -587,6 +602,7 @@ function App() {
   const [dashboardMessage, setDashboardMessage] = useState('')
   const [productFiles, setProductFiles] = useState([])
   const [isUploadingImages, setIsUploadingImages] = useState(false)
+  const [isUploadingCategoryImage, setIsUploadingCategoryImage] = useState(false)
   const [deletingImageUrl, setDeletingImageUrl] = useState('')
   const [draggedCategoryId, setDraggedCategoryId] = useState('')
   const [isSavingCategoryOrder, setIsSavingCategoryOrder] = useState(false)
@@ -936,6 +952,7 @@ function App() {
         name: item.name,
         description: item.description || '',
         hasFreeShipping: Boolean(item.hasFreeShipping),
+        imageUrl: item.imageUrl || '',
       })
     }
 
@@ -1112,6 +1129,134 @@ function App() {
     }
   }
 
+  async function uploadCategoryImage(file) {
+    if (!file) {
+      return ''
+    }
+
+    setIsUploadingCategoryImage(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('images', file)
+      const payload = await apiRequest('/uploads/product-images', {
+        method: 'POST',
+        body: formData,
+      })
+
+      return payload.imageUrls?.[0] || ''
+    } finally {
+      setIsUploadingCategoryImage(false)
+    }
+  }
+
+  async function handleCategoryImageChange(event) {
+    const file = event.target.files?.[0]
+
+    if (!file) {
+      return
+    }
+
+    try {
+      const imageUrl = await uploadCategoryImage(file)
+
+      if (imageUrl) {
+        setCategoryForm((current) => ({ ...current, imageUrl }))
+      }
+    } catch (error) {
+      setDashboardMessage(error.message || 'No fue posible subir la imagen de la categoría.')
+    } finally {
+      event.target.value = ''
+    }
+  }
+
+  async function handleSeasonalWelcomeImageChange(event) {
+    const file = event.target.files?.[0]
+
+    if (!file) {
+      return
+    }
+
+    try {
+      const imageUrl = await uploadCategoryImage(file)
+
+      if (imageUrl) {
+        setSeasonalWelcomeForm((current) => ({ ...current, imageUrl }))
+      }
+    } catch (error) {
+      setDashboardMessage(error.message || 'No fue posible subir la imagen del modal.')
+    } finally {
+      event.target.value = ''
+    }
+  }
+
+  async function handleRemoveSeasonalWelcomeImage() {
+    const { imageUrl } = seasonalWelcomeForm
+
+    if (!imageUrl) {
+      return
+    }
+
+    try {
+      await apiRequest('/uploads/product-images', {
+        method: 'DELETE',
+        body: JSON.stringify({ imageUrl }),
+      })
+    } catch (error) {
+      setDashboardMessage(error.message || 'No fue posible borrar la imagen del modal.')
+      return
+    }
+
+    setSeasonalWelcomeForm((current) => ({ ...current, imageUrl: '' }))
+  }
+
+  async function handleSaveSeasonalWelcomeForm(event) {
+    event.preventDefault()
+    setIsSavingSeasonalWelcome(true)
+
+    try {
+      const savedSettings = await apiRequest('/storefront-settings', {
+        method: 'PUT',
+        body: JSON.stringify({
+          chipOrder,
+          seasonalWelcome: seasonalWelcomeForm,
+        }),
+      })
+
+      setChipOrder(savedSettings?.chipOrder || chipOrder)
+      setSeasonalWelcomeForm({
+        ...emptySeasonalWelcomeForm,
+        ...(savedSettings?.seasonalWelcome || seasonalWelcomeForm),
+      })
+      setDashboardMessage('')
+      showSuccess('Modal de bienvenida actualizado correctamente.')
+    } catch (error) {
+      setDashboardMessage(error.message || 'No fue posible guardar el modal de bienvenida.')
+    } finally {
+      setIsSavingSeasonalWelcome(false)
+    }
+  }
+
+  async function handleRemoveCategoryImage() {
+    const { imageUrl } = categoryForm
+
+    if (!imageUrl) {
+      return
+    }
+
+    try {
+      await apiRequest('/uploads/product-images', {
+        method: 'DELETE',
+        body: JSON.stringify({ imageUrl }),
+      })
+    } catch (error) {
+      setDashboardMessage(error.message || 'No fue posible borrar la imagen de la categoría.')
+      return
+    }
+
+    setCategoryForm((current) => ({ ...current, imageUrl: '' }))
+  }
+
   async function handleRemovePendingProductFile(fileIndex) {
     setProductFiles((current) => current.filter((_, index) => index !== fileIndex))
   }
@@ -1226,6 +1371,7 @@ function App() {
         setCoupons([])
         setPromotions([])
         setChipOrder([])
+        setSeasonalWelcomeForm(emptySeasonalWelcomeForm)
         setPartners([])
         setSelectedPartnerId(partnerSnapshot.partner.id)
         setSelectedPartnerSnapshot(partnerSnapshot)
@@ -1253,10 +1399,10 @@ function App() {
             }),
         isOperator ? Promise.resolve([]) : apiRequest('/partners', { headers }),
         isOperator
-          ? Promise.resolve({ chipOrder: [] })
+          ? Promise.resolve({ chipOrder: [], seasonalWelcome: emptySeasonalWelcomeForm })
           : apiRequest('/storefront-settings', { headers }).catch((error) => {
               if (error.message === 'Route not found') {
-                return { chipOrder: [] }
+                return { chipOrder: [], seasonalWelcome: emptySeasonalWelcomeForm }
               }
 
               throw error
@@ -1273,6 +1419,10 @@ function App() {
       setCoupons(couponRows)
       setPromotions(promotionRows)
       setChipOrder(storefrontSettings?.chipOrder || [])
+      setSeasonalWelcomeForm({
+        ...emptySeasonalWelcomeForm,
+        ...(storefrontSettings?.seasonalWelcome || {}),
+      })
       setPartners(partnerRows)
       setSelectedPartnerId((current) => {
         if (current && partnerRows.some((partner) => partner.id === current)) {
@@ -2218,7 +2368,32 @@ function App() {
                 <span className="selector-checkmark" aria-hidden="true" />
                 <span>Envío gratis para esta categoría</span>
               </label>
-              <button type="submit">{isEdit ? 'Guardar cambios' : 'Crear categoría'}</button>
+              <div className="category-image-field">
+                <span className="category-image-field__label">Imagen de la colección</span>
+                <p className="category-image-field__hint">
+                  Esta imagen aparece en la tienda con el nombre centrado, como tarjeta de categoría.
+                </p>
+                {categoryForm.imageUrl ? (
+                  <div className="category-image-field__preview">
+                    <img src={categoryForm.imageUrl} alt={`Vista previa de ${categoryForm.name || 'la categoría'}`} />
+                    <button type="button" className="category-image-field__remove" onClick={handleRemoveCategoryImage}>
+                      Quitar imagen
+                    </button>
+                  </div>
+                ) : null}
+                <label className="category-image-field__upload">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleCategoryImageChange}
+                    disabled={isUploadingCategoryImage}
+                  />
+                  <span>{isUploadingCategoryImage ? 'Subiendo imagen...' : categoryForm.imageUrl ? 'Cambiar imagen' : 'Subir imagen'}</span>
+                </label>
+              </div>
+              <button type="submit" disabled={isUploadingCategoryImage}>
+                {isUploadingCategoryImage ? 'Espera a que termine la carga...' : isEdit ? 'Guardar cambios' : 'Crear categoría'}
+              </button>
             </form>
           </div>
         </div>
@@ -3023,7 +3198,7 @@ function App() {
             </div>
 
             <p className="section-helper">
-              Arrastra Todas, Promociones y las categorías para definir el orden de los chips en la tienda, de izquierda a derecha.
+              Arrastra Todas, Promociones y las categorías para definir el orden de las colecciones en la tienda. Sube una imagen al crear o modificar cada categoría.
             </p>
 
             <div className="list-stack">
@@ -3058,6 +3233,9 @@ function App() {
                   <div className="list-item__content">
                     <div className="list-item__heading">
                       <span className="list-item__drag-handle" aria-hidden="true">⋮⋮</span>
+                      {category.type === 'category' && category.imageUrl ? (
+                        <img src={category.imageUrl} alt="" className="list-item__category-thumb" />
+                      ) : null}
                       <strong>{category.name}</strong>
                     </div>
                     <small className="list-item__order-label">Posición {index + 1}</small>
@@ -3124,6 +3302,136 @@ function App() {
                 )
               })}
             </div>
+          </article>
+
+          <article className="admin-card">
+            <div className="section-header">
+              <div className="card-heading">
+                <p className="eyebrow">Tienda pública</p>
+                <h3>Modal de bienvenida</h3>
+                <p>
+                  Se muestra una sola vez por visitante la primera vez que entra al catálogo. Puedes cambiar textos,
+                  imagen y desactivarlo sin tocar código.
+                </p>
+              </div>
+            </div>
+
+            <form className="stack-form seasonal-welcome-admin" onSubmit={handleSaveSeasonalWelcomeForm}>
+              <label className={seasonalWelcomeForm.enabled ? 'selector-toggle selector-toggle--active' : 'selector-toggle'}>
+                <input
+                  type="checkbox"
+                  checked={seasonalWelcomeForm.enabled}
+                  onChange={(event) =>
+                    setSeasonalWelcomeForm((current) => ({ ...current, enabled: event.target.checked }))
+                  }
+                />
+                <span className="selector-checkmark" aria-hidden="true" />
+                <span>Mostrar modal en la tienda</span>
+              </label>
+
+              <label>
+                <span>Versión de campaña</span>
+                <input
+                  type="text"
+                  value={seasonalWelcomeForm.version}
+                  onChange={(event) =>
+                    setSeasonalWelcomeForm((current) => ({ ...current, version: event.target.value }))
+                  }
+                  placeholder="1"
+                />
+              </label>
+              <p className="section-helper section-helper--tight">
+                Sube el número (por ejemplo de 1 a 2) cuando cambies la campaña: quien ya cerró el modal volverá a verlo.
+              </p>
+
+              <div className="category-image-field">
+                <span className="category-image-field__label">Imagen del modal</span>
+                <p className="category-image-field__hint">Recomendado: foto vertical o cuadrada, mínimo 900 px de ancho.</p>
+                {seasonalWelcomeForm.imageUrl ? (
+                  <div className="category-image-field__preview">
+                    <img src={seasonalWelcomeForm.imageUrl} alt="Vista previa del modal de bienvenida" />
+                    <button type="button" className="category-image-field__remove" onClick={handleRemoveSeasonalWelcomeImage}>
+                      Quitar imagen
+                    </button>
+                  </div>
+                ) : null}
+                <label className="category-image-field__upload">
+                  {isUploadingCategoryImage ? 'Subiendo imagen...' : 'Subir imagen'}
+                  <input type="file" accept="image/*" onChange={handleSeasonalWelcomeImageChange} />
+                </label>
+              </div>
+
+              <label>
+                <span>Etiqueta sobre la imagen</span>
+                <input
+                  type="text"
+                  value={seasonalWelcomeForm.mediaBadge}
+                  onChange={(event) =>
+                    setSeasonalWelcomeForm((current) => ({ ...current, mediaBadge: event.target.value }))
+                  }
+                  placeholder="Edición limitada"
+                />
+              </label>
+              <label>
+                <span>Texto superior (eyebrow)</span>
+                <input
+                  type="text"
+                  value={seasonalWelcomeForm.eyebrow}
+                  onChange={(event) =>
+                    setSeasonalWelcomeForm((current) => ({ ...current, eyebrow: event.target.value }))
+                  }
+                  placeholder="Temporada Montiory"
+                />
+              </label>
+              <label>
+                <span>Título</span>
+                <input
+                  type="text"
+                  value={seasonalWelcomeForm.title}
+                  onChange={(event) =>
+                    setSeasonalWelcomeForm((current) => ({ ...current, title: event.target.value }))
+                  }
+                  placeholder="Aprovecha las promociones de temporada"
+                />
+              </label>
+              <label>
+                <span>Descripción</span>
+                <textarea
+                  rows="4"
+                  value={seasonalWelcomeForm.description}
+                  onChange={(event) =>
+                    setSeasonalWelcomeForm((current) => ({ ...current, description: event.target.value }))
+                  }
+                  placeholder="Mensaje principal del modal"
+                />
+              </label>
+              <label>
+                <span>Botón principal</span>
+                <input
+                  type="text"
+                  value={seasonalWelcomeForm.primaryCta}
+                  onChange={(event) =>
+                    setSeasonalWelcomeForm((current) => ({ ...current, primaryCta: event.target.value }))
+                  }
+                  placeholder="Ver promociones"
+                />
+              </label>
+              <label>
+                <span>Botón secundario</span>
+                <input
+                  type="text"
+                  value={seasonalWelcomeForm.secondaryCta}
+                  onChange={(event) =>
+                    setSeasonalWelcomeForm((current) => ({ ...current, secondaryCta: event.target.value }))
+                  }
+                  placeholder="Seguir explorando"
+                />
+              </label>
+
+              <button type="submit" disabled={isSavingSeasonalWelcome || isUploadingCategoryImage}>
+                {isSavingSeasonalWelcome ? 'Guardando...' : 'Guardar modal de bienvenida'}
+              </button>
+            </form>
           </article>
         </section>
       )

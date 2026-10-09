@@ -29,6 +29,7 @@ import Product from '../models/Product.js'
 import Promotion from '../models/Promotion.js'
 import ShippingZone from '../models/ShippingZone.js'
 import StorefrontSettings from '../models/StorefrontSettings.js'
+import { normalizeSeasonalWelcome } from '../lib/seasonal-welcome.js'
 import { normalizeChipOrder } from '../lib/chip-order.js'
 
 const router = Router()
@@ -714,6 +715,7 @@ router.get(
         categories.map((category) => String(category._id)),
         Boolean(decantSettings?.isEnabled),
       ),
+      seasonalWelcome: normalizeSeasonalWelcome(storefrontSettings?.seasonalWelcome),
     })
   }),
 )

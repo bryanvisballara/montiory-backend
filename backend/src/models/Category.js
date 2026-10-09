@@ -23,6 +23,11 @@ const categorySchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    imageUrl: {
+      type: String,
+      default: '',
+      trim: true,
+    },
   },
   { timestamps: true },
 )

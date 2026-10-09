@@ -4,7 +4,28 @@ import './App.css'
 
 const isLocalHost = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
 const apiBaseUrl = import.meta.env.VITE_API_URL || (isLocalHost ? 'http://localhost:10000/api' : 'https://montiory-backend.onrender.com/api')
-const brandLogoUrl = `${import.meta.env.BASE_URL}montiory-logo.jpg`
+const brandLockupUrl = `${import.meta.env.BASE_URL}montiory-logo-header.png`
+const brandCollectionFallbackUrl = `${import.meta.env.BASE_URL}montiory-logo-principal.png`
+const defaultSeasonalWelcomeImageUrl = `${import.meta.env.BASE_URL}seasonal-welcome.jpg`
+
+function buildSeasonalWelcomeConfig(apiConfig) {
+  const source = apiConfig && typeof apiConfig === 'object' ? apiConfig : {}
+  const version = String(source.version || '1').trim() || '1'
+
+  return {
+    enabled: source.enabled !== false,
+    storageKey: `montiory-seasonal-welcome-${version}`,
+    imageUrl: String(source.imageUrl || '').trim() || defaultSeasonalWelcomeImageUrl,
+    mediaBadge: String(source.mediaBadge || 'Edición limitada').trim() || 'Edición limitada',
+    eyebrow: String(source.eyebrow || 'Temporada Montiory').trim() || 'Temporada Montiory',
+    title: String(source.title || 'Aprovecha las promociones de temporada').trim() || 'Aprovecha las promociones de temporada',
+    description:
+      String(source.description || '').trim() ||
+      'Combos especiales, precios preferenciales y piezas seleccionadas para renovar tu guardarropa con elegancia.',
+    primaryCta: String(source.primaryCta || 'Ver promociones').trim() || 'Ver promociones',
+    secondaryCta: String(source.secondaryCta || 'Seguir explorando').trim() || 'Seguir explorando',
+  }
+}
 const instagramUrl = 'https://www.instagram.com/montiory.co?igsh=MWN6a2w3Y245MGNwOA=='
 const whatsappPhoneNumber = '573043909551'
 const defaultWhatsAppMessage = 'Hola Montiory, estoy interesado en sus productos. ¿Podrías darme más información?'
@@ -482,6 +503,7 @@ function getOrderedStorefrontChips({ categories, chipOrder, hasDecantProducts, d
     id: String(category._id),
     type: 'category',
     label: category.name,
+    imageUrl: String(category.imageUrl || '').trim(),
     hasFreeShipping: Boolean(category.hasFreeShipping),
     sortOrder: Number.isFinite(Number(category.sortOrder)) ? Number(category.sortOrder) : index,
   }))
@@ -534,6 +556,107 @@ function getOrderedStorefrontChips({ categories, chipOrder, hasDecantProducts, d
 
     return categoryMap.get(id) || null
   }).filter(Boolean)
+}
+
+function getCollectionCardImage(chip, categories, products, decantSettings) {
+  if (chip.type === 'category') {
+    if (chip.imageUrl) {
+      return chip.imageUrl
+    }
+
+    const category = categories.find((item) => String(item._id) === chip.id)
+
+    if (category?.imageUrl) {
+      return category.imageUrl
+    }
+
+    const firstProduct = products.find(
+      (product) => String(product.category?._id) === chip.id && product.imageUrls?.length,
+    )
+
+    if (firstProduct?.imageUrls?.[0]) {
+      return firstProduct.imageUrls[0]
+    }
+  }
+
+  if (chip.id === 'all') {
+    return brandCollectionFallbackUrl
+  }
+
+  if (chip.id === 'decants') {
+    const decantProduct = products.find((product) => getVisibleDecantPrices(product, decantSettings).length > 0)
+
+    if (decantProduct?.imageUrls?.[0]) {
+      return decantProduct.imageUrls[0]
+    }
+  }
+
+  return fallbackImage
+}
+
+function CollectionCard({ chip, imageUrl, isActive, onClick, index }) {
+  return (
+    <button
+      type="button"
+      className={isActive ? 'collection-card collection-card--active' : 'collection-card'}
+      onClick={onClick}
+      style={{ '--enter-delay': `${index * 90}ms` }}
+      aria-pressed={isActive}
+      aria-label={`Ver colección ${chip.label}`}
+    >
+      <img src={imageUrl} alt="" className="collection-card__image" loading="lazy" />
+      <span className="collection-card__overlay" aria-hidden="true" />
+      <span className="collection-card__title">{chip.label}</span>
+      {chip.hasFreeShipping ? (
+        <span className="collection-card__badge">
+          <FreeShippingBadge compact />
+        </span>
+      ) : null}
+    </button>
+  )
+}
+
+function SeasonalWelcomeModal({ modalState, config, onDismiss, onViewPromotions }) {
+  if (typeof document === 'undefined' || modalState === 'hidden') {
+    return null
+  }
+
+  const isClosing = modalState === 'closing'
+
+  return createPortal(
+    <div
+      className={isClosing ? 'seasonal-welcome-modal seasonal-welcome-modal--closing' : 'seasonal-welcome-modal'}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="seasonal-welcome-title"
+      aria-describedby="seasonal-welcome-description"
+    >
+      <button type="button" className="seasonal-welcome-modal__backdrop" onClick={onDismiss} aria-label="Cerrar aviso" />
+      <div className="seasonal-welcome-modal__panel">
+        <button type="button" className="seasonal-welcome-modal__close" onClick={onDismiss} aria-label="Cerrar aviso">
+          ×
+        </button>
+        <div className="seasonal-welcome-modal__media">
+          <img src={config.imageUrl} alt="" decoding="async" />
+          {config.mediaBadge ? <span className="seasonal-welcome-modal__media-badge">{config.mediaBadge}</span> : null}
+        </div>
+        <div className="seasonal-welcome-modal__content">
+          <span className="seasonal-welcome-modal__eyebrow">{config.eyebrow}</span>
+          <h2 id="seasonal-welcome-title">{config.title}</h2>
+          <p id="seasonal-welcome-description">{config.description}</p>
+          <div className="seasonal-welcome-modal__actions">
+            <button type="button" className="button-primary seasonal-welcome-modal__cta" onClick={onViewPromotions}>
+              {config.primaryCta}
+            </button>
+            <button type="button" className="button-secondary seasonal-welcome-modal__dismiss" onClick={onDismiss}>
+              {config.secondaryCta}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
 }
 
 function CartConfirmationModal({ productName, confirmationState, message }) {
@@ -2041,7 +2164,15 @@ function CartIcon() {
 }
 
 function App() {
-  const [payload, setPayload] = useState({ categories: [], products: [], shippingZones: [], decantSettings: { sizes: [] }, promotions: [], chipOrder: [] })
+  const [payload, setPayload] = useState({
+    categories: [],
+    products: [],
+    shippingZones: [],
+    decantSettings: { sizes: [] },
+    promotions: [],
+    chipOrder: [],
+    seasonalWelcome: null,
+  })
   const [activeCategory, setActiveCategory] = useState('all')
   const [selectedSizeFilters, setSelectedSizeFilters] = useState([])
   const [isSizeFilterOpen, setIsSizeFilterOpen] = useState(false)
@@ -2093,6 +2224,11 @@ function App() {
   const [decantQuantities, setDecantQuantities] = useState({})
   const [selectedDecantSizes, setSelectedDecantSizes] = useState({})
   const { confirmationState, isConfirmationVisible, showConfirmation, startClosingConfirmation } = useCartConfirmation()
+  const [seasonalWelcomeState, setSeasonalWelcomeState] = useState('hidden')
+  const seasonalWelcomeConfig = useMemo(
+    () => buildSeasonalWelcomeConfig(payload.seasonalWelcome),
+    [payload.seasonalWelcome],
+  )
 
   useEffect(() => {
     async function loadStorefront() {
@@ -2115,6 +2251,84 @@ function App() {
 
     loadStorefront()
   }, [])
+
+  useEffect(() => {
+    if (seasonalWelcomeState !== 'closing') {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setSeasonalWelcomeState('hidden')
+    }, 260)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [seasonalWelcomeState])
+
+  useEffect(() => {
+    if (isLoading || seasonalWelcomeState !== 'hidden') {
+      return undefined
+    }
+
+    if (!seasonalWelcomeConfig.enabled) {
+      return undefined
+    }
+
+    if (isCheckoutRoute || isCheckoutResultRoute || isCartRoute || routeProductId) {
+      return undefined
+    }
+
+    try {
+      if (window.localStorage.getItem(seasonalWelcomeConfig.storageKey) === '1') {
+        return undefined
+      }
+    } catch {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setSeasonalWelcomeState('visible')
+    }, 500)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [
+    isLoading,
+    isCheckoutRoute,
+    isCheckoutResultRoute,
+    isCartRoute,
+    routeProductId,
+    seasonalWelcomeState,
+    seasonalWelcomeConfig.enabled,
+    seasonalWelcomeConfig.storageKey,
+  ])
+
+  useEffect(() => {
+    if (seasonalWelcomeState !== 'visible') {
+      return undefined
+    }
+
+    function handleKeyDown(event) {
+      if (event.key !== 'Escape') {
+        return
+      }
+
+      try {
+        window.localStorage.setItem(seasonalWelcomeConfig.storageKey, '1')
+      } catch {
+        // Ignore storage failures.
+      }
+
+      setSeasonalWelcomeState('closing')
+    }
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [seasonalWelcomeState, seasonalWelcomeConfig.storageKey])
 
   const hasDecantProducts = useMemo(
     () => payload.products.some((product) => getVisibleDecantPrices(product, payload.decantSettings).length > 0),
@@ -2438,6 +2652,37 @@ function App() {
     if (activeCategory === 'promos') {
       setActiveCategory('all')
     }
+  }
+
+  function persistSeasonalWelcomeDismissal() {
+    try {
+      window.localStorage.setItem(seasonalWelcomeConfig.storageKey, '1')
+    } catch {
+      // Ignore storage failures and still close the modal.
+    }
+  }
+
+  function dismissSeasonalWelcome() {
+    persistSeasonalWelcomeDismissal()
+
+    if (seasonalWelcomeState === 'visible') {
+      setSeasonalWelcomeState('closing')
+      return
+    }
+
+    setSeasonalWelcomeState('hidden')
+  }
+
+  function handleSeasonalWelcomePromotions() {
+    persistSeasonalWelcomeDismissal()
+    setSeasonalWelcomeState('hidden')
+    setIsPromoFilterOpen(false)
+    setIsSizeFilterOpen(false)
+    setActiveCategory('promos')
+
+    window.requestAnimationFrame(() => {
+      document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
   }
 
   function handleAddToPromoCombo(product, variant = null) {
@@ -2925,15 +3170,10 @@ function App() {
     <main className="store-shell">
       <section className="hero-section">
         <header className="topbar">
-          <button type="button" className="topbar__logo" aria-label="Ir al inicio" onClick={handleBackToCatalog}>
-            <img src={brandLogoUrl} alt="" />
-          </button>
+          <span className="topbar__spacer" aria-hidden="true" />
 
-          <button type="button" className="topbar__wordmark" id="inicio" aria-label="Ir al inicio" onClick={handleBackToCatalog}>
-            <strong>
-              <span>MONTIORY</span>
-            </strong>
-            <span className="topbar__tagline">VISTE DE MODA</span>
+          <button type="button" className="topbar__brand" id="inicio" aria-label="Ir al inicio" onClick={handleBackToCatalog}>
+            <img src={brandLockupUrl} alt="Montiory" width={924} height={980} decoding="async" />
           </button>
 
           <button type="button" className="cart-button" aria-label={`Carrito con ${cartCount} productos`} onClick={handleOpenCart}>
@@ -3023,77 +3263,82 @@ function App() {
                 <span>Colecciones</span>
               </div>
 
-              <div className={isSizeFilterOpen || isPromoFilterOpen ? 'filter-row filter-row--hero is-size-filter-open' : 'filter-row filter-row--hero'}>
+              <div className="collection-grid">
                 {orderedStorefrontChips.map((chip, index) => {
-                  if (chip.id === 'promos') {
-                    if (!(payload.promotions || []).length) {
-                      return null
-                    }
-
-                    return (
-                      <div key="promos" style={{ '--enter-delay': `${index * 90}ms` }}>
-                        <PromoFilterChip
-                          promotions={payload.promotions || []}
-                          selectedPromoId={selectedPromoId}
-                          selectedSizes={selectedSizeFilters}
-                          isOpen={isPromoFilterOpen}
-                          onOpenChange={(isOpen) => {
-                            setIsPromoFilterOpen(isOpen)
-                            if (isOpen) {
-                              setActiveCategory('promos')
-                              setIsSizeFilterOpen(false)
-                            }
-                          }}
-                          onSearch={handleSearchPromo}
-                          onClear={handleClearPromo}
-                        />
-                      </div>
-                    )
+                  if (chip.id === 'promos' && !(payload.promotions || []).length) {
+                    return null
                   }
 
                   const isAllChip = chip.id === 'all'
-                  const isActive = isAllChip
-                    ? activeCategory === 'all' && !selectedPromo
-                    : activeCategory === chip.id
+                  const isPromosChip = chip.id === 'promos'
+                  const isActive = isPromosChip
+                    ? Boolean(selectedPromo) || activeCategory === 'promos'
+                    : isAllChip
+                      ? activeCategory === 'all' && !selectedPromo
+                      : activeCategory === chip.id
 
                   return (
-                    <button
-                      type="button"
+                    <CollectionCard
                       key={chip.id}
-                      className={isActive ? 'chip chip--active' : 'chip'}
+                      chip={chip}
+                      imageUrl={getCollectionCardImage(chip, payload.categories, payload.products, payload.decantSettings)}
+                      isActive={isActive}
+                      index={index}
                       onClick={() => {
+                        if (isPromosChip) {
+                          setActiveCategory('promos')
+                          setIsPromoFilterOpen(true)
+                          setIsSizeFilterOpen(false)
+                          return
+                        }
+
                         setActiveCategory(isAllChip ? 'all' : chip.id)
                         setIsPromoFilterOpen(false)
+                        setSelectedPromoId('')
+                        setDraftPromoSelections([])
+                        setSelectedSizeFilters([])
                       }}
-                      style={{ '--enter-delay': `${index * 90}ms` }}
-                    >
-                      <span className="chip__content">
-                        <span>{chip.label}</span>
-                        {chip.hasFreeShipping ? <FreeShippingBadge compact /> : null}
-                      </span>
-                    </button>
+                    />
                   )
                 })}
-                <div style={{ '--enter-delay': `${(orderedStorefrontChips.length + 1) * 90}ms` }}>
-                  <SizeFilterChip
+              </div>
+
+              <div className={isSizeFilterOpen || isPromoFilterOpen ? 'filter-row filter-row--tools is-size-filter-open' : 'filter-row filter-row--tools'}>
+                {(payload.promotions || []).length ? (
+                  <PromoFilterChip
+                    promotions={payload.promotions || []}
+                    selectedPromoId={selectedPromoId}
                     selectedSizes={selectedSizeFilters}
-                    isOpen={isSizeFilterOpen}
+                    isOpen={isPromoFilterOpen}
                     onOpenChange={(isOpen) => {
-                      setIsSizeFilterOpen(isOpen)
+                      setIsPromoFilterOpen(isOpen)
                       if (isOpen) {
-                        setIsPromoFilterOpen(false)
+                        setActiveCategory('promos')
+                        setIsSizeFilterOpen(false)
                       }
                     }}
-                    onToggleSize={(label) => {
-                      setSelectedSizeFilters((current) => (
-                        current.includes(label)
-                          ? current.filter((sizeLabel) => sizeLabel !== label)
-                          : [...current, label]
-                      ))
-                    }}
-                    onClear={() => setSelectedSizeFilters([])}
+                    onSearch={handleSearchPromo}
+                    onClear={handleClearPromo}
                   />
-                </div>
+                ) : null}
+                <SizeFilterChip
+                  selectedSizes={selectedSizeFilters}
+                  isOpen={isSizeFilterOpen}
+                  onOpenChange={(isOpen) => {
+                    setIsSizeFilterOpen(isOpen)
+                    if (isOpen) {
+                      setIsPromoFilterOpen(false)
+                    }
+                  }}
+                  onToggleSize={(label) => {
+                    setSelectedSizeFilters((current) => (
+                      current.includes(label)
+                        ? current.filter((sizeLabel) => sizeLabel !== label)
+                        : [...current, label]
+                    ))
+                  }}
+                  onClear={() => setSelectedSizeFilters([])}
+                />
               </div>
             </div>
 
@@ -3270,6 +3515,15 @@ function App() {
         ) : null}
 
         {isConfirmationVisible ? <CartConfirmationModal productName={confirmationProductName} confirmationState={confirmationState} message={confirmationMessage} /> : null}
+
+        {seasonalWelcomeState !== 'hidden' ? (
+          <SeasonalWelcomeModal
+            modalState={seasonalWelcomeState}
+            config={seasonalWelcomeConfig}
+            onDismiss={dismissSeasonalWelcome}
+            onViewPromotions={handleSeasonalWelcomePromotions}
+          />
+        ) : null}
 
       </section>
 
