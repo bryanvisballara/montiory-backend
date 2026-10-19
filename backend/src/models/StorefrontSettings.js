@@ -12,6 +12,10 @@ const storefrontSettingsSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    collectionChipImages: {
+      all: { type: String, default: '' },
+      promos: { type: String, default: '' },
+    },
     seasonalWelcome: {
       enabled: { type: Boolean, default: true },
       version: { type: String, default: '1' },

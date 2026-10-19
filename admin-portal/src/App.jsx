@@ -25,6 +25,8 @@ const adminHomePath = adminBasePath ? `${adminBasePath}/` : '/'
 const adminLoginPath = adminBasePath ? `${adminBasePath}/login` : '/login'
 
 const emptyCategoryForm = { name: '', description: '', hasFreeShipping: false, imageUrl: '' }
+const emptyCollectionChipImages = { all: '', promos: '' }
+const emptyCollectionChipForm = { chipId: '', imageUrl: '' }
 const emptySeasonalWelcomeForm = {
   enabled: true,
   version: '1',
@@ -573,6 +575,9 @@ function App() {
   const [chipOrder, setChipOrder] = useState([])
   const [seasonalWelcomeForm, setSeasonalWelcomeForm] = useState(emptySeasonalWelcomeForm)
   const [isSavingSeasonalWelcome, setIsSavingSeasonalWelcome] = useState(false)
+  const [collectionChipImages, setCollectionChipImages] = useState(emptyCollectionChipImages)
+  const [collectionChipForm, setCollectionChipForm] = useState(emptyCollectionChipForm)
+  const [isSavingCollectionChipImage, setIsSavingCollectionChipImage] = useState(false)
   const [promotionForm, setPromotionForm] = useState(emptyPromotionForm)
   const [categoryForm, setCategoryForm] = useState(emptyCategoryForm)
   const [productForm, setProductForm] = useState(emptyProductForm)
@@ -783,12 +788,14 @@ function App() {
         name: 'Todas',
         description: 'Chip del storefront que muestra todo el catálogo.',
         type: 'all',
+        imageUrl: collectionChipImages.all || '',
       },
       {
         _id: 'promos',
         name: 'Promociones',
         description: 'Chip del storefront para armar combos y promociones.',
         type: 'promos',
+        imageUrl: collectionChipImages.promos || '',
       },
       ...categoryItems,
       ...(shouldShowDecants ? [{
@@ -811,7 +818,7 @@ function App() {
     }
 
     return orderedIds.map((id) => itemMap.get(id)).filter(Boolean)
-  }, [categories, chipOrder, decantSettings.isEnabled])
+  }, [categories, chipOrder, collectionChipImages, decantSettings.isEnabled])
 
   const selectedMarketingCustomers = useMemo(
     () => customers.filter((customer) => selectedMarketingCustomerIds.includes(customer._id)),
@@ -953,6 +960,13 @@ function App() {
         description: item.description || '',
         hasFreeShipping: Boolean(item.hasFreeShipping),
         imageUrl: item.imageUrl || '',
+      })
+    }
+
+    if (type === 'collection-chip') {
+      setCollectionChipForm({
+        chipId: String(item._id),
+        imageUrl: collectionChipImages[String(item._id)] || item.imageUrl || '',
       })
     }
 
@@ -1210,6 +1224,86 @@ function App() {
     setSeasonalWelcomeForm((current) => ({ ...current, imageUrl: '' }))
   }
 
+  async function handleCollectionChipImageChange(event) {
+    const file = event.target.files?.[0]
+
+    if (!file) {
+      return
+    }
+
+    try {
+      const imageUrl = await uploadCategoryImage(file)
+
+      if (imageUrl) {
+        setCollectionChipForm((current) => ({ ...current, imageUrl }))
+      }
+    } catch (error) {
+      setDashboardMessage(error.message || 'No fue posible subir la imagen de la colección.')
+    } finally {
+      event.target.value = ''
+    }
+  }
+
+  async function handleRemoveCollectionChipFormImage() {
+    const { imageUrl } = collectionChipForm
+
+    if (!imageUrl) {
+      return
+    }
+
+    try {
+      await apiRequest('/uploads/product-images', {
+        method: 'DELETE',
+        body: JSON.stringify({ imageUrl }),
+      })
+    } catch (error) {
+      setDashboardMessage(error.message || 'No fue posible borrar la imagen.')
+      return
+    }
+
+    setCollectionChipForm((current) => ({ ...current, imageUrl: '' }))
+  }
+
+  async function handleCollectionChipImageSubmit(event) {
+    event.preventDefault()
+
+    const chipId = String(collectionChipForm.chipId || '').trim()
+
+    if (!chipId) {
+      return
+    }
+
+    setIsSavingCollectionChipImage(true)
+
+    try {
+      const nextCollectionChipImages = {
+        ...collectionChipImages,
+        [chipId]: collectionChipForm.imageUrl || '',
+      }
+      const savedSettings = await apiRequest('/storefront-settings', {
+        method: 'PUT',
+        body: JSON.stringify({
+          chipOrder,
+          seasonalWelcome: seasonalWelcomeForm,
+          collectionChipImages: nextCollectionChipImages,
+        }),
+      })
+
+      setCollectionChipImages({
+        ...emptyCollectionChipImages,
+        ...(savedSettings?.collectionChipImages || nextCollectionChipImages),
+      })
+      setCollectionChipForm(emptyCollectionChipForm)
+      closeModal()
+      setDashboardMessage('')
+      showSuccess('Imagen de la colección actualizada correctamente.')
+    } catch (error) {
+      setDashboardMessage(error.message || 'No fue posible guardar la imagen de la colección.')
+    } finally {
+      setIsSavingCollectionChipImage(false)
+    }
+  }
+
   async function handleSaveSeasonalWelcomeForm(event) {
     event.preventDefault()
     setIsSavingSeasonalWelcome(true)
@@ -1220,6 +1314,7 @@ function App() {
         body: JSON.stringify({
           chipOrder,
           seasonalWelcome: seasonalWelcomeForm,
+          collectionChipImages,
         }),
       })
 
@@ -1372,6 +1467,7 @@ function App() {
         setPromotions([])
         setChipOrder([])
         setSeasonalWelcomeForm(emptySeasonalWelcomeForm)
+        setCollectionChipImages(emptyCollectionChipImages)
         setPartners([])
         setSelectedPartnerId(partnerSnapshot.partner.id)
         setSelectedPartnerSnapshot(partnerSnapshot)
@@ -1399,10 +1495,18 @@ function App() {
             }),
         isOperator ? Promise.resolve([]) : apiRequest('/partners', { headers }),
         isOperator
-          ? Promise.resolve({ chipOrder: [], seasonalWelcome: emptySeasonalWelcomeForm })
+          ? Promise.resolve({
+              chipOrder: [],
+              seasonalWelcome: emptySeasonalWelcomeForm,
+              collectionChipImages: emptyCollectionChipImages,
+            })
           : apiRequest('/storefront-settings', { headers }).catch((error) => {
               if (error.message === 'Route not found') {
-                return { chipOrder: [], seasonalWelcome: emptySeasonalWelcomeForm }
+                return {
+                  chipOrder: [],
+                  seasonalWelcome: emptySeasonalWelcomeForm,
+                  collectionChipImages: emptyCollectionChipImages,
+                }
               }
 
               throw error
@@ -1422,6 +1526,10 @@ function App() {
       setSeasonalWelcomeForm({
         ...emptySeasonalWelcomeForm,
         ...(storefrontSettings?.seasonalWelcome || {}),
+      })
+      setCollectionChipImages({
+        ...emptyCollectionChipImages,
+        ...(storefrontSettings?.collectionChipImages || {}),
       })
       setPartners(partnerRows)
       setSelectedPartnerId((current) => {
@@ -2329,6 +2437,58 @@ function App() {
 
     const isEdit = modalState.mode === 'edit'
 
+    if (modalState.type === 'collection-chip') {
+      const chipLabel = modalState.item?.name || 'Colección'
+
+      return (
+        <div className="modal-backdrop" onClick={closeModal}>
+          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <p className="eyebrow">Colecciones</p>
+                <h3>Imagen de {chipLabel}</h3>
+              </div>
+              <button type="button" className="modal-close" onClick={closeModal}>Cerrar</button>
+            </div>
+            <form className="stack-form" onSubmit={handleCollectionChipImageSubmit}>
+              <div className="category-image-field">
+                <span className="category-image-field__label">Imagen de la colección</span>
+                <p className="category-image-field__hint">
+                  Aparece en la tienda con el nombre centrado sobre la foto, igual que las demás categorías.
+                </p>
+                {collectionChipForm.imageUrl ? (
+                  <div className="category-image-field__preview">
+                    <img src={collectionChipForm.imageUrl} alt={`Vista previa de ${chipLabel}`} />
+                    <button type="button" className="category-image-field__remove" onClick={handleRemoveCollectionChipFormImage}>
+                      Quitar imagen
+                    </button>
+                  </div>
+                ) : null}
+                <label className="category-image-field__upload">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleCollectionChipImageChange}
+                    disabled={isUploadingCategoryImage}
+                  />
+                  <span>
+                    {isUploadingCategoryImage
+                      ? 'Subiendo imagen...'
+                      : collectionChipForm.imageUrl
+                        ? 'Cambiar imagen'
+                        : 'Subir imagen'}
+                  </span>
+                </label>
+              </div>
+              <button type="submit" disabled={isSavingCollectionChipImage || isUploadingCategoryImage}>
+                {isSavingCollectionChipImage ? 'Guardando...' : 'Guardar imagen'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )
+    }
+
     if (modalState.type === 'category') {
       return (
         <div className="modal-backdrop" onClick={closeModal}>
@@ -3198,7 +3358,7 @@ function App() {
             </div>
 
             <p className="section-helper">
-              Arrastra Todas, Promociones y las categorías para definir el orden de las colecciones en la tienda. Sube una imagen al crear o modificar cada categoría.
+              Arrastra Todas, Promociones y las categorías para definir el orden en la tienda. Usa «Imagen» en cada fila para cambiar la foto de la tarjeta (incluye Todas y Promociones).
             </p>
 
             <div className="list-stack">
@@ -3233,7 +3393,7 @@ function App() {
                   <div className="list-item__content">
                     <div className="list-item__heading">
                       <span className="list-item__drag-handle" aria-hidden="true">⋮⋮</span>
-                      {category.type === 'category' && category.imageUrl ? (
+                      {(category.type === 'category' || category.type === 'all' || category.type === 'promos') && category.imageUrl ? (
                         <img src={category.imageUrl} alt="" className="list-item__category-thumb" />
                       ) : null}
                       <strong>{category.name}</strong>
@@ -3260,6 +3420,12 @@ function App() {
                       </button>
                       <button type="button" className="list-item__delete" onClick={() => openDeleteModal('category', category)}>
                         Eliminar
+                      </button>
+                    </div>
+                  ) : category.type === 'all' || category.type === 'promos' ? (
+                    <div className="list-item__toolbar">
+                      <button type="button" className="list-item__edit" onClick={() => openEditModal('collection-chip', category)}>
+                        Imagen
                       </button>
                     </div>
                   ) : category.type === 'decants' ? (

@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { asyncHandler } from '../lib/async-handler.js'
 import { normalizeChipOrder } from '../lib/chip-order.js'
+import { normalizeCollectionChipImages } from '../lib/collection-chip-images.js'
 import { normalizeSeasonalWelcome } from '../lib/seasonal-welcome.js'
 import { requireAuth, requireRole } from '../middleware/auth.js'
 import Category from '../models/Category.js'
@@ -29,6 +30,7 @@ function buildSettingsResponse(settings, chipOrder) {
     key: 'default',
     chipOrder,
     seasonalWelcome: normalizeSeasonalWelcome(settings?.seasonalWelcome),
+    collectionChipImages: normalizeCollectionChipImages(settings?.collectionChipImages),
   }
 }
 
@@ -52,10 +54,15 @@ router.put(
     const seasonalWelcome = normalizeSeasonalWelcome(
       request.body?.seasonalWelcome !== undefined ? request.body.seasonalWelcome : existing?.seasonalWelcome,
     )
+    const collectionChipImages = normalizeCollectionChipImages(
+      request.body?.collectionChipImages !== undefined
+        ? request.body.collectionChipImages
+        : existing?.collectionChipImages,
+    )
 
     const settings = await StorefrontSettings.findOneAndUpdate(
       { key: 'default' },
-      { $set: { chipOrder, seasonalWelcome } },
+      { $set: { chipOrder, seasonalWelcome, collectionChipImages } },
       { new: true, upsert: true },
     ).lean()
 

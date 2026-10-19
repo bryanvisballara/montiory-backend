@@ -29,6 +29,7 @@ import Product from '../models/Product.js'
 import Promotion from '../models/Promotion.js'
 import ShippingZone from '../models/ShippingZone.js'
 import StorefrontSettings from '../models/StorefrontSettings.js'
+import { normalizeCollectionChipImages } from '../lib/collection-chip-images.js'
 import { normalizeSeasonalWelcome } from '../lib/seasonal-welcome.js'
 import { normalizeChipOrder } from '../lib/chip-order.js'
 
@@ -716,6 +717,7 @@ router.get(
         Boolean(decantSettings?.isEnabled),
       ),
       seasonalWelcome: normalizeSeasonalWelcome(storefrontSettings?.seasonalWelcome),
+      collectionChipImages: normalizeCollectionChipImages(storefrontSettings?.collectionChipImages),
     })
   }),
 )

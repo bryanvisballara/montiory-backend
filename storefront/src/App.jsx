@@ -498,7 +498,8 @@ function FilterMenuPortal({ isOpen, triggerRef, menuRef, layoutKey = '', classNa
   )
 }
 
-function getOrderedStorefrontChips({ categories, chipOrder, hasDecantProducts, decantSettings }) {
+function getOrderedStorefrontChips({ categories, chipOrder, hasDecantProducts, decantSettings, collectionChipImages }) {
+  const chipImages = collectionChipImages && typeof collectionChipImages === 'object' ? collectionChipImages : {}
   const categoryChips = (categories || []).map((category, index) => ({
     id: String(category._id),
     type: 'category',
@@ -509,8 +510,18 @@ function getOrderedStorefrontChips({ categories, chipOrder, hasDecantProducts, d
   }))
   const categoryMap = new Map(categoryChips.map((chip) => [chip.id, chip]))
   const specialChips = {
-    all: { id: 'all', type: 'all', label: 'Todas' },
-    promos: { id: 'promos', type: 'promos', label: 'Promociones' },
+    all: {
+      id: 'all',
+      type: 'all',
+      label: 'Todas',
+      imageUrl: String(chipImages.all || '').trim(),
+    },
+    promos: {
+      id: 'promos',
+      type: 'promos',
+      label: 'Promociones',
+      imageUrl: String(chipImages.promos || '').trim(),
+    },
     decants: hasDecantProducts
       ? {
           id: 'decants',
@@ -559,6 +570,10 @@ function getOrderedStorefrontChips({ categories, chipOrder, hasDecantProducts, d
 }
 
 function getCollectionCardImage(chip, categories, products, decantSettings) {
+  if (chip.imageUrl) {
+    return chip.imageUrl
+  }
+
   if (chip.type === 'category') {
     if (chip.imageUrl) {
       return chip.imageUrl
@@ -581,6 +596,16 @@ function getCollectionCardImage(chip, categories, products, decantSettings) {
 
   if (chip.id === 'all') {
     return brandCollectionFallbackUrl
+  }
+
+  if (chip.id === 'promos') {
+    const promoProduct = products.find((product) => product.imageUrls?.length)
+
+    if (promoProduct?.imageUrls?.[0]) {
+      return promoProduct.imageUrls[0]
+    }
+
+    return fallbackImage
   }
 
   if (chip.id === 'decants') {
@@ -2108,12 +2133,61 @@ function ComboProductCard({
   )
 }
 
+function PromotionsOnboarding({ promotions, onSelectPromotion, onDismiss }) {
+  if (!promotions.length) {
+    return (
+      <aside className="promo-onboarding" id="promociones">
+        <button type="button" className="promo-onboarding__close" onClick={onDismiss} aria-label="Cerrar guía">
+          ×
+        </button>
+        <h3>Promociones de temporada</h3>
+        <p>Por ahora no hay combos activos. Explora el catálogo y vuelve pronto para ver nuevas ofertas.</p>
+      </aside>
+    )
+  }
+
+  return (
+    <aside className="promo-onboarding" id="promociones">
+      <button type="button" className="promo-onboarding__close" onClick={onDismiss} aria-label="Cerrar guía">
+        ×
+      </button>
+      <p className="promo-onboarding__eyebrow">Promociones Montiory</p>
+      <h3>Elige tu combo y arma tu look</h3>
+      <p className="promo-onboarding__lead">
+        Cada promoción agrupa varias prendas a un precio especial. Selecciona un combo, luego entra a cada publicación,
+        elige tu talla y agrégala hasta completar el combo.
+      </p>
+      <ol className="promo-onboarding__steps">
+        <li>Selecciona uno de los combos disponibles.</li>
+        <li>Abre las prendas que te gusten y elige talla.</li>
+        <li>Cuando completes el combo, agrégalo al carrito o paga al instante.</li>
+      </ol>
+      <div className="promo-onboarding__combos">
+        {promotions.map((promotion) => (
+          <button
+            key={promotion._id}
+            type="button"
+            className="promo-onboarding__combo"
+            onClick={() => onSelectPromotion(promotion)}
+          >
+            <strong>{formatPromotionLabel(promotion, formatCurrency)}</strong>
+            <span>Armar este combo</span>
+          </button>
+        ))}
+      </div>
+      <p className="promo-onboarding__hint">
+        También puedes usar el botón <strong>Promociones</strong> arriba para filtrar por tallas antes de buscar.
+      </p>
+    </aside>
+  )
+}
+
 function PromoComboBar({ promo, selections, onRemoveSelection, onAddToCart, onPayNow, onCancel }) {
   const remaining = Math.max(0, promo.itemCount - selections.length)
   const isComplete = remaining === 0
 
   return (
-    <div className="promo-combo-bar">
+    <div className="promo-combo-bar" id="promo-combo-bar">
       <div className="promo-combo-bar__copy">
         <span>Arma tu combo</span>
         <strong>{formatPromotionLabel(promo, formatCurrency)}</strong>
@@ -2174,6 +2248,7 @@ function App() {
     promotions: [],
     chipOrder: [],
     seasonalWelcome: null,
+    collectionChipImages: { all: '', promos: '' },
   })
   const [activeCategory, setActiveCategory] = useState('all')
   const [selectedSizeFilters, setSelectedSizeFilters] = useState([])
@@ -2227,6 +2302,7 @@ function App() {
   const [selectedDecantSizes, setSelectedDecantSizes] = useState({})
   const { confirmationState, isConfirmationVisible, showConfirmation, startClosingConfirmation } = useCartConfirmation()
   const [seasonalWelcomeState, setSeasonalWelcomeState] = useState('hidden')
+  const [isPromoGuideOpen, setIsPromoGuideOpen] = useState(false)
   const seasonalWelcomeConfig = useMemo(
     () => buildSeasonalWelcomeConfig(payload.seasonalWelcome),
     [payload.seasonalWelcome],
@@ -2343,8 +2419,9 @@ function App() {
       chipOrder: payload.chipOrder,
       hasDecantProducts,
       decantSettings: payload.decantSettings,
+      collectionChipImages: payload.collectionChipImages,
     }),
-    [hasDecantProducts, payload.categories, payload.chipOrder, payload.decantSettings],
+    [hasDecantProducts, payload.categories, payload.chipOrder, payload.collectionChipImages, payload.decantSettings],
   )
 
   useEffect(() => {
@@ -2643,6 +2720,7 @@ function App() {
     setActiveCategory('promos')
     setIsPromoFilterOpen(false)
     setIsSizeFilterOpen(false)
+    setIsPromoGuideOpen(false)
   }
 
   function handleClearPromo() {
@@ -2650,10 +2728,47 @@ function App() {
     setDraftPromoSelections([])
     setSelectedSizeFilters([])
     setIsPromoFilterOpen(false)
+    setIsPromoGuideOpen(false)
 
     if (activeCategory === 'promos') {
       setActiveCategory('all')
     }
+  }
+
+  function scrollToPromotionsSection() {
+    window.setTimeout(() => {
+      document.getElementById('promociones')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 80)
+  }
+
+  function scrollToPromoComboBar() {
+    window.requestAnimationFrame(() => {
+      document.getElementById('promo-combo-bar')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  }
+
+  function handleStartPromotion(promotion) {
+    handleSearchPromo(promotion, [])
+    scrollToPromoComboBar()
+  }
+
+  function handleSeasonalWelcomePromotions() {
+    persistSeasonalWelcomeDismissal()
+    setSeasonalWelcomeState('hidden')
+    setIsSizeFilterOpen(false)
+
+    const promotions = payload.promotions || []
+
+    setActiveCategory('promos')
+
+    if (promotions.length === 1) {
+      handleStartPromotion(promotions[0])
+      return
+    }
+
+    setIsPromoGuideOpen(true)
+    setIsPromoFilterOpen(promotions.length > 1)
+    scrollToPromotionsSection()
   }
 
   function persistSeasonalWelcomeDismissal() {
@@ -2673,18 +2788,6 @@ function App() {
     }
 
     setSeasonalWelcomeState('hidden')
-  }
-
-  function handleSeasonalWelcomePromotions() {
-    persistSeasonalWelcomeDismissal()
-    setSeasonalWelcomeState('hidden')
-    setIsPromoFilterOpen(false)
-    setIsSizeFilterOpen(false)
-    setActiveCategory('promos')
-
-    window.requestAnimationFrame(() => {
-      document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
   }
 
   function handleAddToPromoCombo(product, variant = null) {
@@ -3291,6 +3394,8 @@ function App() {
                           setActiveCategory('promos')
                           setIsPromoFilterOpen(true)
                           setIsSizeFilterOpen(false)
+                          setIsPromoGuideOpen(true)
+                          scrollToPromotionsSection()
                           return
                         }
 
@@ -3305,7 +3410,10 @@ function App() {
                 })}
               </div>
 
-              <div className={isSizeFilterOpen || isPromoFilterOpen ? 'filter-row filter-row--tools is-size-filter-open' : 'filter-row filter-row--tools'}>
+              <div
+                id={!isPromoGuideOpen && !selectedPromo ? 'promociones' : undefined}
+                className={isSizeFilterOpen || isPromoFilterOpen ? 'filter-row filter-row--tools is-size-filter-open' : 'filter-row filter-row--tools'}
+              >
                 {(payload.promotions || []).length ? (
                   <PromoFilterChip
                     promotions={payload.promotions || []}
@@ -3343,6 +3451,14 @@ function App() {
                 />
               </div>
             </div>
+
+            {isPromoGuideOpen && !selectedPromo ? (
+              <PromotionsOnboarding
+                promotions={payload.promotions || []}
+                onSelectPromotion={handleStartPromotion}
+                onDismiss={() => setIsPromoGuideOpen(false)}
+              />
+            ) : null}
 
             {selectedPromo ? (
               <PromoComboBar
